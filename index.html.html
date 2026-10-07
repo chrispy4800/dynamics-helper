@@ -874,7 +874,7 @@
       renderAssumptions();
 
       try {
-        const response = await fetch("/api/problem");
+        const response = await fetch("problem_config.json");
         const problem = await response.json();
 
         if (!response.ok) {
@@ -907,7 +907,7 @@
           status("Could not load Vehicle_Image.png.");
         };
 
-        image.src = problem.image_url;
+        image.src = Vehicle_Image.png;
       } catch (error) {
         status(error.message);
       }
