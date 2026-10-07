@@ -9,6 +9,10 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
 
+  <!-- Plotly for 3D Graphing -->
+  <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+
+  
   <style>
     :root { font-family: Arial, sans-serif; color: #222; background: #f3f4f6; }
     body { margin: 0; }
@@ -195,8 +199,7 @@
 
   <script>
     "use strict";
-
-    // --- State & Constants ---
+// --- State & Constants ---
     const VIEW_ORDER = ["side", "front", "top", "3d"];
     const QUADRANTS = { side: [0, 0], front: [1, 0], top: [0, 1], "3d": [1, 1] };
     const LABELS = { side: "Side", front: "Front", top: "Top", "3d": "3D" };
@@ -220,40 +223,27 @@
 
     function emptyProgress() {
       return {
-        step0: {
-          frames: { inertial: "", vehicle: "" },
-          points: [],
-          assumptions: [],
-          references: { inertial: null, vehicle: null }
-        },
-        step1: {
-          hypothesis: "",
-          guidepost: "",
-          difficulty: ""
-        },
+        step0: { frames: { inertial: "N", vehicle: "B" }, points: [], assumptions: [], references: { inertial: null, vehicle: null } },
+        step1: { hypothesis: "", guidepost: "", difficulty: "" },
         step2: { 
-          vectors: [], 
-          vehDesc: "", 
-          ineDesc: "", 
-          eqVals: {}, 
+          vectors: [], vehDesc: "", ineDesc: "", 
+          eqVals: { r: ["","",""], theta: ["","",""], v: ["","",""], omega: ["","",""] }, 
+          geomVals: {}, 
           rotVals: [["","",""],["","",""],["","",""]] 
+        },
+        step3: {
+          masses: {}, totalMass: "", r_com: ["","",""], r_p_com: {}, j_p: {}, j_total: [["","",""],["","",""],["","",""]]
         }
       };
     }
 
     function status(message) { $("status").textContent = message; }
-
-    function getStorageKey() {
-      return `dynamics-v1-${currentProblemId}`;
-    }
+    function getStorageKey() { return `dynamics-v1-${currentProblemId}`; }
 
     function persist() {
       if (!currentProblemId) return;
-      try {
-        localStorage.setItem(getStorageKey(), JSON.stringify(progress));
-      } catch {
-        status("Browser storage failed. Download your progress JSON.");
-      }
+      try { localStorage.setItem(getStorageKey(), JSON.stringify(progress)); } 
+      catch { status("Browser storage failed."); }
     }
 
     // --- Loading System ---
@@ -262,37 +252,27 @@
         const response = await fetch("problems.json");
         const problems = await response.json();
         const selector = $("problemSelector");
-        
-        problems.forEach(p => {
-          selector.add(new Option(p.name, p.id));
-        });
-
+        problems.forEach(p => selector.add(new Option(p.name, p.id)));
         if (problems.length > 0) {
           selector.value = problems[0].id;
           await loadProblem(problems[0].id);
         }
-      } catch (err) {
-        alert("Could not load problems.json. Please ensure it exists in the repository root alongside index.html.");
-      }
+      } catch (err) { alert("Ensure problems.json exists in root."); }
     }
 
     async function loadProblem(problemId) {
       currentProblemId = problemId;
-      
-      // Load saved state
       try {
         const saved = JSON.parse(localStorage.getItem(getStorageKey()));
         progress = saved && saved.step0 ? saved : emptyProgress();
-      } catch {
-        progress = emptyProgress();
-      }
+        
+        // Data migration checks for older saves
+        if(!progress.step2.geomVals) progress.step2.geomVals = {};
+        if(!progress.step3) progress.step3 = emptyProgress().step3;
+      } catch { progress = emptyProgress(); }
       
-      // Populate UI with loaded state
-      refreshStep0UI();
-      refreshStep1UI();
-      refreshStep2UI();
+      refreshStep0UI(); refreshStep1UI(); refreshStep2UI(); refreshStep3UI();
 
-      // Fetch assets
       image = null;
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx2.clearRect(0, 0, canvas2.width, canvas2.height);
@@ -304,25 +284,19 @@
         
         image = new Image();
         image.onload = () => {
-          canvas.width = image.naturalWidth;
-          canvas.height = image.naturalHeight;
-          
+          canvas.width = canvas2.width = image.naturalWidth;
+          canvas.height = canvas2.height = image.naturalHeight;
           const req = config.quadrant_intersection || {};
           const x = Number(req.x), y = Number(req.y);
-          
           split = {
             x: x > 0 && x < canvas.width ? x : canvas.width / 2,
             y: y > 0 && y < canvas.height ? y : canvas.height / 2
           };
-          draw();
-          drawStep2();
+          draw(); drawStep2();
           status("Problem loaded.");
         };
-        image.onerror = () => status(`Could not load problems/${problemId}/Vehicle_Image.png`);
         image.src = `problems/${problemId}/Vehicle_Image.png`;
-      } catch (e) {
-        status("Error loading problem assets.");
-      }
+      } catch (e) { status("Error loading problem assets."); }
     }
 
     $("problemSelector").addEventListener("change", (e) => loadProblem(e.target.value));
@@ -333,19 +307,12 @@
     $("tab-step2").addEventListener("click", () => switchTab(2));
 
     function switchTab(step) {
-      $("tab-step0").classList.toggle("active", step === 0);
-      $("tab-step1").classList.toggle("active", step === 1);
-      $("tab-step2").classList.toggle("active", step === 2);
-      
-      $("view-step0").classList.toggle("active", step === 0);
-      $("view-step1").classList.toggle("active", step === 1);
-      $("view-step2").classList.toggle("active", step === 2);
-
+      [0,1,2].forEach(i => {
+        $(`tab-step${i}`).classList.toggle("active", step === i);
+        $(`view-step${i}`).classList.toggle("active", step === i);
+      });
       if (step === 0) draw();
-      if (step === 2) {
-        refreshStep2UI();
-        drawStep2();
-      }
+      if (step === 2) { refreshStep2UI(); drawStep2(); }
     }
 
     // --- Math & Rendering Helpers ---
@@ -357,9 +324,33 @@
       }
     }
 
-    function frameName(type) {
-      return type === "vehicle-fixed" ? progress.step0.frames.vehicle : progress.step0.frames.inertial;
+    function frameName(type) { return type === "vehicle-fixed" ? progress.step0.frames.vehicle : progress.step0.frames.inertial; }
+
+    function createEqRow(parent, labelTex, inputsArr, basisVecs, color, onChange) {
+      const row = document.createElement("div");
+      row.style.display = "flex"; row.style.alignItems = "center"; row.style.marginBottom = "8px";
+      
+      const lbl = document.createElement("div");
+      lbl.style.width = "140px";
+      math(lbl, labelTex);
+      row.appendChild(lbl);
+
+      for(let i=0; i<3; i++) {
+        const inp = document.createElement("input");
+        inp.style.width = "60px"; inp.style.margin = "0 5px"; inp.style.textAlign = "center";
+        inp.value = inputsArr[i] || "";
+        inp.addEventListener("input", (e) => { inputsArr[i] = e.target.value; onChange(); });
+        row.appendChild(inp);
+        
+        const bLbl = document.createElement("div");
+        math(bLbl, `\\hat{${basisVecs[i]}} ${i<2 ? '+' : ''}`);
+        bLbl.style.color = color;
+        row.appendChild(bLbl);
+      }
+      parent.appendChild(row);
     }
+
+
 
     // ==========================================
     //                 STEP 0
@@ -660,6 +651,7 @@
       $("vehDesc").value = progress.step2.vehDesc || "";
       $("ineDesc").value = progress.step2.ineDesc || "";
       renderVectorsLog();
+      renderStep2Equations();
     }
 
     ["vehDesc", "ineDesc"].forEach(id => {
@@ -835,6 +827,69 @@
         ctx2.shadowBlur = 0;
       });
     }
+
+    function renderStep2Equations() {
+      const eqDiv = $("step2-equations");
+      const rotDiv = $("step2-rotation");
+      eqDiv.innerHTML = ""; rotDiv.innerHTML = "";
+
+      const vehRef = progress.step0.references.vehicle || "V";
+      const ineRef = progress.step0.references.inertial || "I";
+      const vf = progress.step0.frames.vehicle || "B";
+      const inf = progress.step0.frames.inertial || "N";
+
+      const vehPts = progress.step0.points.filter(p => p.type === "vehicle-fixed").map(p => p.label);
+      const ineVecs = progress.step2.vectors.filter(v => v.type === "inertial-fixed").map(v=>v.name);
+      const vehVecs = progress.step2.vectors.filter(v => v.type === "vehicle-fixed").map(v=>v.name);
+      
+      while(ineVecs.length < 3) ineVecs.push("I_" + (ineVecs.length+1));
+      while(vehVecs.length < 3) vehVecs.push("V_" + (vehVecs.length+1));
+
+      // 1. Standard Vectors
+      createEqRow(eqDiv, `\\vec{r}_{${vehRef}/${ineRef}} =`, progress.step2.eqVals.r, ineVecs, "#003087", persist);
+      createEqRow(eqDiv, `\\vec{\\theta}_{\\tilde{${vf}}/\\tilde{${inf}}} =`, progress.step2.eqVals.theta, ineVecs, "#003087", persist);
+      createEqRow(eqDiv, `^{\\tilde{${inf}}}\\vec{v}_{${vehRef}/${ineRef}} =`, progress.step2.eqVals.v, ineVecs, "#003087", persist);
+      createEqRow(eqDiv, `^{\\tilde{${inf}}}\\vec{\\omega}_{\\tilde{${vf}}/\\tilde{${inf}}} =`, progress.step2.eqVals.omega, ineVecs, "#003087", persist);
+
+      // 2. Geometry of Vehicle
+      const geomHeader = document.createElement("h4");
+      geomHeader.textContent = "Geometry of the Vehicle";
+      eqDiv.appendChild(geomHeader);
+
+      vehPts.forEach(pt => {
+        if (!progress.step2.geomVals[pt]) progress.step2.geomVals[pt] = ["","",""];
+        createEqRow(eqDiv, `\\vec{r}_{${pt}/${vehRef}} =`, progress.step2.geomVals[pt], vehVecs, "#FA4616", persist);
+      });
+
+      // 3. Rotation Matrix
+      const rRow = document.createElement("div");
+      rRow.style.display = "flex";
+      const rLbl = document.createElement("div");
+      math(rLbl, `\\mathcal{R}_{\\tilde{${vf}}/\\tilde{${inf}}} =`);
+      rLbl.style.width = "100px"; rLbl.style.marginTop = "10px";
+      rRow.appendChild(rLbl);
+
+      const rMat = document.createElement("div");
+      for(let i=0; i<3; i++) {
+        const tr = document.createElement("div");
+        tr.style.display = "flex"; tr.style.marginBottom = "5px";
+        for(let j=0; j<3; j++) {
+          const inp = document.createElement("input");
+          inp.style.width = "50px"; inp.style.margin = "0 5px";
+          inp.value = progress.step2.rotVals[i][j];
+          inp.addEventListener("input", (e) => { progress.step2.rotVals[i][j] = e.target.value; persist(); });
+          tr.appendChild(inp);
+          const tLbl = document.createElement("div");
+          math(tLbl, `\\hat{${vehVecs[i]}}\\hat{${ineVecs[j]}}^\\top ${i<2||j<2 ? '+' : ''}`);
+          tLbl.style.marginRight = "10px";
+          tr.appendChild(tLbl);
+        }
+        rMat.appendChild(tr);
+      }
+      rRow.appendChild(rMat);
+      rotDiv.appendChild(rRow);
+    }
+
 
     // --- Save & Export ---
     $("saveProgress").addEventListener("click", () => { persist(); status("Progress saved in this browser."); });
