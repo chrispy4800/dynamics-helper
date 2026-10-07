@@ -3,260 +3,148 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Dynamics Helper — Step 0</title>
+  <title>Dynamics Helper</title>
 
-  <!-- Math rendering for point and frame labels. -->
-  <link rel="stylesheet"
-        href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
-  <script defer
-          src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js">
-  </script>
+  <!-- Math rendering -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
 
   <style>
-    :root {
-      font-family: Arial, sans-serif;
-      color: #222;
-      background: #f3f4f6;
-    }
+    :root { font-family: Arial, sans-serif; color: #222; background: #f3f4f6; }
+    body { margin: 0; }
+    header { background: #003087; color: white; padding: 14px 20px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;}
+    header h1 { margin: 0; font-size: 1.3rem; }
+    main { max-width: 1500px; margin: auto; padding: 18px; }
+    
+    .panel { background: white; border: 1px solid #d8dce2; border-radius: 8px; padding: 14px; margin-bottom: 14px; }
+    .layout { display: grid; grid-template-columns: minmax(0, 1fr) 290px; gap: 14px; align-items: start; }
+    
+    #vehicleCanvas { display: block; width: 100%; height: auto; cursor: crosshair; background: #ddd; }
+    input, select, textarea, button { font: inherit; }
+    input, select, textarea { box-sizing: border-box; padding: 7px; margin: 4px 5px 8px 0; max-width: 100%; }
+    textarea { width: 100%; min-height: 80px; resize: vertical; }
+    
+    button { padding: 8px 11px; margin: 3px; border: 0; border-radius: 5px; background: #003087; color: white; cursor: pointer; }
+    button:hover { filter: brightness(1.18); }
+    button.secondary { background: #555; }
+    button.orange { background: #c84716; }
+    
+    .point-row { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #ddd; padding: 7px 2px; gap: 5px; }
+    .point-row.selected { background: #dce8f7; }
+    .point-row button { margin: 0; }
+    .assumption { border: 1px solid #ddd; padding: 10px; margin: 10px 0; overflow-wrap: anywhere; }
+    .assumption p { margin: 5px 0; }
+    .status { min-height: 1.4em; font-weight: bold; color: #003087; }
+    .hint { color: #555; font-size: 0.92rem; }
+    
+    /* Tabs */
+    .tabs { display: flex; gap: 10px; margin-bottom: 14px; }
+    .tab { padding: 10px 20px; background: #ddd; cursor: pointer; border-radius: 5px; font-weight: bold; }
+    .tab.active { background: #FA4616; color: white; }
+    .view { display: none; }
+    .view.active { display: block; }
 
-    body {
-      margin: 0;
-    }
-
-    header {
-      background: #003087;
-      color: white;
-      padding: 14px 20px;
-    }
-
-    header h1 {
-      margin: 0;
-      font-size: 1.3rem;
-    }
-
-    main {
-      max-width: 1500px;
-      margin: auto;
-      padding: 18px;
-    }
-
-    .panel {
-      background: white;
-      border: 1px solid #d8dce2;
-      border-radius: 8px;
-      padding: 14px;
-      margin-bottom: 14px;
-    }
-
-    .layout {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) 290px;
-      gap: 14px;
-      align-items: start;
-    }
-
-    #vehicleCanvas {
-      display: block;
-      width: 100%;
-      height: auto;
-      cursor: crosshair;
-      background: #ddd;
-    }
-
-    input, select, textarea, button {
-      font: inherit;
-    }
-
-    input, select, textarea {
-      box-sizing: border-box;
-      padding: 7px;
-      margin: 4px 5px 8px 0;
-      max-width: 100%;
-    }
-
-    textarea {
-      width: 100%;
-      min-height: 64px;
-      resize: vertical;
-    }
-
-    button {
-      padding: 8px 11px;
-      margin: 3px;
-      border: 0;
-      border-radius: 5px;
-      background: #003087;
-      color: white;
-      cursor: pointer;
-    }
-
-    button:hover {
-      filter: brightness(1.18);
-    }
-
-    button.secondary {
-      background: #555;
-    }
-
-    button.orange {
-      background: #c84716;
-    }
-
-    button:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
-
-    .point-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      border-bottom: 1px solid #ddd;
-      padding: 7px 2px;
-      gap: 5px;
-    }
-
-    .point-row.selected {
-      background: #dce8f7;
-    }
-
-    .point-row button {
-      margin: 0;
-    }
-
-    .assumption {
-      border: 1px solid #ddd;
-      padding: 10px;
-      margin: 10px 0;
-      overflow-wrap: anywhere;
-    }
-
-    .assumption p {
-      margin: 5px 0;
-    }
-
-    .status {
-      min-height: 1.4em;
-      font-weight: bold;
-      color: #003087;
-    }
-
-    .hint {
-      color: #555;
-      font-size: 0.92rem;
-    }
-
-    @media (max-width: 850px) {
-      .layout {
-        grid-template-columns: 1fr;
-      }
-    }
+    @media (max-width: 850px) { .layout { grid-template-columns: 1fr; } }
   </style>
 </head>
 
 <body>
   <header>
-    <h1>Dynamics Helper — Step 0: Frames, Points, and Assumptions</h1>
+    <h1>Dynamics Helper</h1>
+    <div>
+      <label for="problemSelector" style="font-weight: bold; margin-right: 8px;">Select Problem:</label>
+      <select id="problemSelector" style="color: black; padding: 4px;"></select>
+    </div>
   </header>
 
   <main>
-    <section class="panel">
-      <h2>Reference frames</h2>
-
-      <label>
-        Inertial frame:
-        <input id="inertialFrame" maxlength="20"
-               placeholder="e.g. N">
-      </label>
-
-      <label>
-        Vehicle frame:
-        <input id="vehicleFrame" maxlength="20"
-               placeholder="e.g. B">
-      </label>
-
-      <button id="saveFrames">Set frame names</button>
-      <div id="framePreview"></div>
-    </section>
-
-    <div class="layout">
-      <section class="panel">
-        <h2>Vehicle image</h2>
-        <p class="hint">
-          To place a vehicle-fixed point, click its location in the
-          Side, Front, Top, and 3D views, in that order.
-        </p>
-
-        <canvas id="vehicleCanvas"
-                aria-label="Vehicle diagram with four views">
-        </canvas>
-
-        <p id="status" class="status" role="status"></p>
-      </section>
-
-      <aside class="panel">
-        <h2>Add point</h2>
-
-        <label for="pointLabel">Point label</label><br>
-        <input id="pointLabel" placeholder="e.g. A or A_1"><br>
-
-        <label for="pointType">Fixed to</label><br>
-        <select id="pointType">
-          <option value="vehicle-fixed">Vehicle frame</option>
-          <option value="inertial-fixed">Inertial frame</option>
-        </select><br>
-
-        <button id="addPoint" class="orange">Add point</button>
-        <button id="cancelPlacement" class="secondary"
-                hidden>Cancel placement</button>
-
-        <h2>Points log</h2>
-        <div id="pointsLog"></div>
-
-        <h2>Reference points</h2>
-
-        <label for="vehicleReference">Vehicle reference</label><br>
-        <select id="vehicleReference"></select><br>
-
-        <label for="inertialReference">Inertial reference</label><br>
-        <select id="inertialReference"></select>
-      </aside>
+    <div class="tabs">
+      <div class="tab active" id="tab-step0">Step 0: Frames & Points</div>
+      <div class="tab" id="tab-step1">Step 1: Hypothesize</div>
     </div>
 
-    <section class="panel">
-      <h2>Assumptions</h2>
+    <!-- ================= STEP 0 VIEW ================= -->
+    <div id="view-step0" class="view active">
+      <section class="panel">
+        <h2>Reference frames</h2>
+        <label>Inertial frame: <input id="inertialFrame" maxlength="20" placeholder="e.g. N"></label>
+        <label>Vehicle frame: <input id="vehicleFrame" maxlength="20" placeholder="e.g. B"></label>
+        <button id="saveFrames">Set frame names</button>
+        <div id="framePreview"></div>
+      </section>
 
-      <label for="assumption">1. What is your assumption?</label>
-      <textarea id="assumption"></textarea>
+      <div class="layout">
+        <section class="panel">
+          <h2>Vehicle image</h2>
+          <p class="hint">To place a vehicle-fixed point, click its location in the Side, Front, Top, and 3D views.</p>
+          <canvas id="vehicleCanvas"></canvas>
+          <p id="status" class="status"></p>
+        </section>
 
-      <label for="why">2. Why are you making it?</label>
-      <textarea id="why"></textarea>
+        <aside class="panel">
+          <h2>Add point</h2>
+          <label for="pointLabel">Point label</label><br>
+          <input id="pointLabel" placeholder="e.g. A or A_1"><br>
+          <label for="pointType">Fixed to</label><br>
+          <select id="pointType">
+            <option value="vehicle-fixed">Vehicle frame</option>
+            <option value="inertial-fixed">Inertial frame</option>
+          </select><br>
+          <button id="addPoint" class="orange">Add point</button>
+          <button id="cancelPlacement" class="secondary" hidden>Cancel placement</button>
 
-      <label for="reasonable">3. Why is it reasonable?</label>
-      <textarea id="reasonable"></textarea>
+          <h2>Points log</h2>
+          <div id="pointsLog"></div>
 
-      <button id="saveAssumption">Add assumption</button>
-      <button id="cancelEdit" class="secondary" hidden>
-        Cancel edit
-      </button>
+          <h2>Reference points</h2>
+          <label for="vehicleReference">Vehicle reference</label><br>
+          <select id="vehicleReference"></select><br>
+          <label for="inertialReference">Inertial reference</label><br>
+          <select id="inertialReference"></select>
+        </aside>
+      </div>
 
-      <div id="assumptionsLog"></div>
-    </section>
+      <section class="panel">
+        <h2>Assumptions</h2>
+        <label>1. What is your assumption?</label>
+        <textarea id="assumption"></textarea>
+        <label>2. Why are you making it?</label>
+        <textarea id="why"></textarea>
+        <label>3. Why is it reasonable?</label>
+        <textarea id="reasonable"></textarea>
+        <button id="saveAssumption">Add assumption</button>
+        <button id="cancelEdit" class="secondary" hidden>Cancel edit</button>
+        <div id="assumptionsLog"></div>
+      </section>
+    </div>
 
+    <!-- ================= STEP 1 VIEW ================= -->
+    <div id="view-step1" class="view">
+      <section class="panel">
+        <h2>1. Hypothesis</h2>
+        <p class="hint">What do you think the motion will be?</p>
+        <textarea id="step1-hypothesis"></textarea>
+
+        <h2>2. Guidepost</h2>
+        <p class="hint">What is an example system you can draw on for insight, and how can it help you specifically?</p>
+        <textarea id="step1-guidepost"></textarea>
+
+        <h2>3. Difficulty</h2>
+        <p class="hint">What will be a difficult part of this problem specifically?</p>
+        <textarea id="step1-difficulty"></textarea>
+      </section>
+    </div>
+
+    <!-- ================= SAVE & EXPORT (Shared) ================= -->
     <section class="panel">
       <button id="saveProgress">Save in this browser</button>
       <button id="exportProgress">Download progress JSON</button>
-
       <label>
         Import progress JSON:
-        <input id="importProgress" type="file"
-               accept=".json,application/json">
+        <input id="importProgress" type="file" accept=".json,application/json">
       </label>
-
       <p class="hint">
-        This prototype saves only in this browser. Clearing browser
-        storage or using another device will not carry progress over
-        unless you export and import the JSON file.
+        This prototype saves only in this browser. Clearing browser storage or using another device will not carry progress over unless you export and import the JSON file.
       </p>
     </section>
   </main>
@@ -264,57 +152,14 @@
   <script>
     "use strict";
 
-    const STORAGE_KEY = "dynamics-step0-prototype-v1";
+    // --- State & Constants ---
     const VIEW_ORDER = ["side", "front", "top", "3d"];
-
-    const QUADRANTS = {
-      side: [0, 0],
-      front: [1, 0],
-      top: [0, 1],
-      "3d": [1, 1]
-    };
-
-    const LABELS = {
-      side: "Side",
-      front: "Front",
-      top: "Top",
-      "3d": "3D"
-    };
-
+    const QUADRANTS = { side: [0, 0], front: [1, 0], top: [0, 1], "3d": [1, 1] };
+    const LABELS = { side: "Side", front: "Front", top: "Top", "3d": "3D" };
     const $ = (id) => document.getElementById(id);
 
-    function emptyProgress() {
-      return {
-        frames: { inertial: "", vehicle: "" },
-        points: [],
-        assumptions: [],
-        references: { inertial: null, vehicle: null }
-      };
-    }
-
-    function loadLocal() {
-      try {
-        const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
-        if (!saved || !Array.isArray(saved.points)) {
-          return emptyProgress();
-        }
-
-        return {
-          frames: saved.frames || { inertial: "", vehicle: "" },
-          points: saved.points,
-          assumptions: Array.isArray(saved.assumptions)
-            ? saved.assumptions : [],
-          references: saved.references || {
-            inertial: null,
-            vehicle: null
-          }
-        };
-      } catch {
-        return emptyProgress();
-      }
-    }
-
-    let progress = loadLocal();
+    let currentProblemId = null;
+    let progress = emptyProgress();
     let selectedLabel = null;
     let placement = null;
     let editAssumptionIndex = null;
@@ -324,102 +169,177 @@
     const canvas = $("vehicleCanvas");
     const ctx = canvas.getContext("2d");
 
-    function status(message) {
-      $("status").textContent = message;
+    function emptyProgress() {
+      return {
+        step0: {
+          frames: { inertial: "", vehicle: "" },
+          points: [],
+          assumptions: [],
+          references: { inertial: null, vehicle: null }
+        },
+        step1: {
+          hypothesis: "",
+          guidepost: "",
+          difficulty: ""
+        }
+      };
+    }
+
+    function status(message) { $("status").textContent = message; }
+
+    function getStorageKey() {
+      return `dynamics-v1-${currentProblemId}`;
     }
 
     function persist() {
+      if (!currentProblemId) return;
       try {
-        localStorage.setItem(
-          STORAGE_KEY,
-          JSON.stringify(progress)
-        );
+        localStorage.setItem(getStorageKey(), JSON.stringify(progress));
       } catch {
-        status(
-          "Browser storage failed. Download your progress JSON."
-        );
+        status("Browser storage failed. Download your progress JSON.");
       }
     }
 
+    // --- Loading System ---
+    async function loadProblemList() {
+      try {
+        const response = await fetch("problems.json");
+        const problems = await response.json();
+        const selector = $("problemSelector");
+        
+        problems.forEach(p => {
+          selector.add(new Option(p.name, p.id));
+        });
+
+        if (problems.length > 0) {
+          selector.value = problems[0].id;
+          await loadProblem(problems[0].id);
+        }
+      } catch (err) {
+        alert("Could not load problems.json. Please ensure it exists in the repository root.");
+      }
+    }
+
+    async function loadProblem(problemId) {
+      currentProblemId = problemId;
+      
+      // Load saved state
+      try {
+        const saved = JSON.parse(localStorage.getItem(getStorageKey()));
+        progress = saved && saved.step0 ? saved : emptyProgress();
+      } catch {
+        progress = emptyProgress();
+      }
+      
+      // Populate UI with loaded state
+      refreshStep0UI();
+      refreshStep1UI();
+
+      // Fetch assets
+      image = null;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      status("Loading image...");
+
+      try {
+        const configRes = await fetch(`problems/${problemId}/problem_config.json`);
+        const config = configRes.ok ? await configRes.json() : {};
+        
+        image = new Image();
+        image.onload = () => {
+          canvas.width = image.naturalWidth;
+          canvas.height = image.naturalHeight;
+          const req = config.quadrant_intersection || {};
+          const x = Number(req.x), y = Number(req.y);
+          
+          split = {
+            x: x > 0 && x < canvas.width ? x : canvas.width / 2,
+            y: y > 0 && y < canvas.height ? y : canvas.height / 2
+          };
+          draw();
+          status("Problem loaded.");
+        };
+        image.onerror = () => status(`Could not load problems/${problemId}/Vehicle_Image.png`);
+        image.src = `problems/${problemId}/Vehicle_Image.png`;
+      } catch (e) {
+        status("Error loading problem assets.");
+      }
+    }
+
+    $("problemSelector").addEventListener("change", (e) => loadProblem(e.target.value));
+
+    // --- Tabs Logic ---
+    $("tab-step0").addEventListener("click", () => switchTab(0));
+    $("tab-step1").addEventListener("click", () => switchTab(1));
+
+    function switchTab(step) {
+      $("tab-step0").classList.toggle("active", step === 0);
+      $("tab-step1").classList.toggle("active", step === 1);
+      $("view-step0").classList.toggle("active", step === 0);
+      $("view-step1").classList.toggle("active", step === 1);
+    }
+
+    // --- Math & Rendering Helpers ---
     function math(element, expression) {
       element.textContent = expression;
-
       if (window.katex) {
-        try {
-          katex.render(expression, element, {
-            throwOnError: false,
-            trust: false
-          });
-        } catch {
-          element.textContent = expression;
-        }
+        try { katex.render(expression, element, { throwOnError: false, trust: false }); } 
+        catch { element.textContent = expression; }
       }
     }
 
     function frameName(type) {
-      return type === "vehicle-fixed"
-        ? progress.frames.vehicle
-        : progress.frames.inertial;
+      return type === "vehicle-fixed" ? progress.step0.frames.vehicle : progress.step0.frames.inertial;
     }
 
-    function refreshFrames() {
-      $("inertialFrame").value = progress.frames.inertial || "";
-      $("vehicleFrame").value = progress.frames.vehicle || "";
+    function refreshStep0UI() {
+      $("inertialFrame").value = progress.step0.frames.inertial || "";
+      $("vehicleFrame").value = progress.step0.frames.vehicle || "";
 
       const preview = $("framePreview");
       preview.replaceChildren();
-
-      for (const [description, value] of [
-        ["Inertial: ", progress.frames.inertial],
-        ["Vehicle: ", progress.frames.vehicle]
-      ]) {
+      for (const [desc, val] of [["Inertial: ", progress.step0.frames.inertial], ["Vehicle: ", progress.step0.frames.vehicle]]) {
         const line = document.createElement("div");
-        line.append(document.createTextNode(description));
-
+        line.append(document.createTextNode(desc));
         const rendered = document.createElement("span");
-        math(rendered, `\\tilde{${value || "?"}}`);
+        math(rendered, `\\tilde{${val || "?"}}`);
         line.append(rendered);
         preview.append(line);
       }
 
-      const vehicle = $("pointType").options[0];
-      const inertial = $("pointType").options[1];
+      $("pointType").options[0].textContent = `Vehicle-fixed (${progress.step0.frames.vehicle || "not named"})`;
+      $("pointType").options[1].textContent = `Inertial-fixed (${progress.step0.frames.inertial || "not named"})`;
 
-      vehicle.textContent =
-        `Vehicle-fixed (${progress.frames.vehicle || "not named"})`;
-      inertial.textContent =
-        `Inertial-fixed (${progress.frames.inertial || "not named"})`;
+      renderPoints();
+      renderAssumptions();
     }
 
+    function refreshStep1UI() {
+      $("step1-hypothesis").value = progress.step1.hypothesis || "";
+      $("step1-guidepost").value = progress.step1.guidepost || "";
+      $("step1-difficulty").value = progress.step1.difficulty || "";
+    }
+
+    // --- Step 1 Listeners ---
+    ["hypothesis", "guidepost", "difficulty"].forEach(id => {
+      $(`step1-${id}`).addEventListener("input", (e) => {
+        progress.step1[id] = e.target.value;
+        persist();
+      });
+    });
+
+    // --- Step 0 UI Functions ---
     function renderReferences() {
-      for (const [type, selectId, key] of [
-        ["vehicle-fixed", "vehicleReference", "vehicle"],
-        ["inertial-fixed", "inertialReference", "inertial"]
-      ]) {
+      for (const [type, selectId, key] of [["vehicle-fixed", "vehicleReference", "vehicle"], ["inertial-fixed", "inertialReference", "inertial"]]) {
         const select = $(selectId);
         select.replaceChildren();
-
-        const blank = new Option("Select a point", "");
-        select.add(blank);
-
-        const eligible = progress.points.filter(
-          (point) => point.type === type
-        );
-
-        for (const point of eligible) {
-          select.add(new Option(point.label, point.label));
+        select.add(new Option("Select a point", ""));
+        const eligible = progress.step0.points.filter(p => p.type === type);
+        eligible.forEach(p => select.add(new Option(p.label, p.label)));
+        
+        if (!eligible.some(p => p.label === progress.step0.references[key])) {
+          progress.step0.references[key] = null;
         }
-
-        const saved = progress.references[key];
-        const stillExists = eligible.some(
-          (point) => point.label === saved
-        );
-
-        if (!stillExists) {
-          progress.references[key] = null;
-        }
-
-        select.value = progress.references[key] || "";
+        select.value = progress.step0.references[key] || "";
       }
     }
 
@@ -427,13 +347,9 @@
       const log = $("pointsLog");
       log.replaceChildren();
 
-      for (const point of progress.points) {
+      for (const point of progress.step0.points) {
         const row = document.createElement("div");
-        row.className = "point-row";
-
-        if (selectedLabel === point.label) {
-          row.classList.add("selected");
-        }
+        row.className = "point-row" + (selectedLabel === point.label ? " selected" : "");
 
         const select = document.createElement("button");
         select.className = "secondary";
@@ -441,17 +357,11 @@
         select.style.textAlign = "left";
 
         const rendered = document.createElement("span");
-        math(
-          rendered,
-          `${point.label}\\quad\\tilde{${
-            frameName(point.type) || "?"
-          }}`
-        );
-
+        math(rendered, `${point.label}\\quad\\tilde{${frameName(point.type) || "?"}}`);
         select.append(rendered);
+        
         select.addEventListener("click", () => {
-          selectedLabel =
-            selectedLabel === point.label ? null : point.label;
+          selectedLabel = selectedLabel === point.label ? null : point.label;
           renderPoints();
           draw();
         });
@@ -459,176 +369,86 @@
         const remove = document.createElement("button");
         remove.textContent = "Delete";
         remove.addEventListener("click", () => {
-          if (placement?.point === point) {
-            placement = null;
-            $("cancelPlacement").hidden = true;
-          }
-
-          progress.points = progress.points.filter(
-            (candidate) => candidate !== point
-          );
-
-          if (selectedLabel === point.label) {
-            selectedLabel = null;
-          }
-
-          renderReferences();
-          renderPoints();
-          draw();
-          persist();
+          if (placement?.point === point) { placement = null; $("cancelPlacement").hidden = true; }
+          progress.step0.points = progress.step0.points.filter(c => c !== point);
+          if (selectedLabel === point.label) selectedLabel = null;
+          renderReferences(); renderPoints(); draw(); persist();
         });
 
         row.append(select, remove);
         log.append(row);
       }
-
       renderReferences();
     }
 
     function bounds(view) {
       const [col, row] = QUADRANTS[view];
-
-      const left = col === 0 ? 0 : split.x;
-      const top = row === 0 ? 0 : split.y;
-      const width = col === 0
-        ? split.x
-        : canvas.width - split.x;
-      const height = row === 0
-        ? split.y
-        : canvas.height - split.y;
-
-      return { left, top, width, height };
+      return {
+        left: col === 0 ? 0 : split.x,
+        top: row === 0 ? 0 : split.y,
+        width: col === 0 ? split.x : canvas.width - split.x,
+        height: row === 0 ? split.y : canvas.height - split.y
+      };
     }
 
     function draw() {
       if (!image || !split) return;
-
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.drawImage(image, 0, 0);
 
       ctx.strokeStyle = "#555";
       ctx.lineWidth = Math.max(2, canvas.width / 900);
-      ctx.beginPath();
-      ctx.moveTo(split.x, 0);
-      ctx.lineTo(split.x, canvas.height);
-      ctx.moveTo(0, split.y);
-      ctx.lineTo(canvas.width, split.y);
-      ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(split.x, 0); ctx.lineTo(split.x, canvas.height);
+      ctx.moveTo(0, split.y); ctx.lineTo(canvas.width, split.y); ctx.stroke();
 
       const radius = Math.max(5, canvas.width / 180);
       ctx.font = `${Math.max(14, canvas.width / 85)}px Arial`;
 
-      for (const point of progress.points) {
+      for (const point of progress.step0.points) {
         if (point.type !== "vehicle-fixed") continue;
+        const color = point.type === "vehicle-fixed" ? "#FA4616" : "#003087";
 
-        const color =
-          point.type === "vehicle-fixed"
-            ? "#FA4616" : "#003087";
-
-        for (const [view, fractions] of Object.entries(
-          point.clicks || {}
-        )) {
+        for (const [view, fractions] of Object.entries(point.clicks || {})) {
           if (!QUADRANTS[view]) continue;
-
           const area = bounds(view);
-          const [xf, yf] = fractions;
-
-          const x = area.left + xf * area.width;
-          const y = area.top + yf * area.height;
+          const x = area.left + fractions[0] * area.width;
+          const y = area.top + fractions[1] * area.height;
 
           if (selectedLabel === point.label) {
-            ctx.strokeStyle = "#003087";
-            ctx.lineWidth = Math.max(3, radius / 2);
-            ctx.beginPath();
-            ctx.arc(x, y, radius + 6, 0, 2 * Math.PI);
-            ctx.stroke();
+            ctx.strokeStyle = "#003087"; ctx.lineWidth = Math.max(3, radius / 2);
+            ctx.beginPath(); ctx.arc(x, y, radius + 6, 0, 2 * Math.PI); ctx.stroke();
           }
-
           ctx.fillStyle = color;
-          ctx.beginPath();
-          ctx.arc(x, y, radius, 0, 2 * Math.PI);
-          ctx.fill();
-
-          ctx.fillText(
-            point.label,
-            x + radius + 4,
-            y - radius
-          );
+          ctx.beginPath(); ctx.arc(x, y, radius, 0, 2 * Math.PI); ctx.fill();
+          ctx.fillText(point.label, x + radius + 4, y - radius);
         }
       }
     }
 
-    function cancelPlacement() {
-      if (!placement) return;
-
-      progress.points = progress.points.filter(
-        (point) => point !== placement.point
-      );
-
-      placement = null;
-      $("cancelPlacement").hidden = true;
-      status("Point placement canceled.");
-
-      renderPoints();
-      draw();
-      persist();
-    }
-
+    // --- Step 0 Events ---
     $("saveFrames").addEventListener("click", () => {
       const inertial = $("inertialFrame").value.trim();
       const vehicle = $("vehicleFrame").value.trim();
-
-      // Keep the first prototype's math labels simple and safe.
-      if (
-        !/^[A-Za-z][A-Za-z0-9_]*$/.test(inertial)
-        || !/^[A-Za-z][A-Za-z0-9_]*$/.test(vehicle)
-      ) {
-        status(
-          "Use a letter followed by optional letters, numbers, "
-          + "or underscores for each frame."
-        );
+      if (!/^[A-Za-z][A-Za-z0-9_]*$/.test(inertial) || !/^[A-Za-z][A-Za-z0-9_]*$/.test(vehicle)) {
+        status("Use a letter followed by optional letters, numbers, or underscores for each frame.");
         return;
       }
-
-      progress.frames = { inertial, vehicle };
-      persist();
-      refreshFrames();
-      renderPoints();
-      status("Frame names saved in this browser.");
+      progress.step0.frames = { inertial, vehicle };
+      persist(); refreshStep0UI(); status("Frame names saved.");
     });
 
     $("addPoint").addEventListener("click", () => {
-      if (placement) {
-        status("Finish or cancel the current point first.");
-        return;
-      }
-
-      if (
-        !progress.frames.inertial
-        || !progress.frames.vehicle
-      ) {
-        status("Name both reference frames first.");
-        return;
-      }
+      if (placement) { status("Finish or cancel the current point first."); return; }
+      if (!progress.step0.frames.inertial || !progress.step0.frames.vehicle) { status("Name both reference frames first."); return; }
 
       const label = $("pointLabel").value.trim();
       const type = $("pointType").value;
-
-      if (
-        !/^[A-Za-z0-9_]{1,20}$/.test(label)
-        || progress.points.some(
-          (point) => point.label === label
-        )
-      ) {
-        status(
-          "Enter a unique point label using letters, "
-          + "numbers, or underscores."
-        );
-        return;
+      if (!/^[A-Za-z0-9_]{1,20}$/.test(label) || progress.step0.points.some(p => p.label === label)) {
+        status("Enter a unique point label."); return;
       }
 
       const point = { label, type, clicks: {} };
-      progress.points.push(point);
+      progress.step0.points.push(point);
       $("pointLabel").value = "";
 
       if (type === "vehicle-fixed") {
@@ -636,91 +456,59 @@
         $("cancelPlacement").hidden = false;
         status("Click this point in the Side view.");
       } else {
-        status(`Inertial-fixed point ${label} logged.`);
-        persist();
+        status(`Inertial-fixed point ${label} logged.`); persist();
       }
-
-      renderPoints();
-      draw();
+      renderPoints(); draw();
     });
 
-    $("cancelPlacement").addEventListener(
-      "click", cancelPlacement
-    );
+    $("cancelPlacement").addEventListener("click", () => {
+      if (!placement) return;
+      progress.step0.points = progress.step0.points.filter(p => p !== placement.point);
+      placement = null; $("cancelPlacement").hidden = true; status("Point placement canceled.");
+      renderPoints(); draw(); persist();
+    });
 
     canvas.addEventListener("click", (event) => {
       if (!placement || !image || !split) return;
+      const rect = canvas.getBoundingClientRect();
+      const x = (event.clientX - rect.left) * canvas.width / rect.width;
+      const y = (event.clientY - rect.top) * canvas.height / rect.height;
 
-      const rectangle = canvas.getBoundingClientRect();
-      const x = (
-        (event.clientX - rectangle.left)
-        * canvas.width / rectangle.width
-      );
-      const y = (
-        (event.clientY - rectangle.top)
-        * canvas.height / rectangle.height
-      );
+      if (x < 0 || x >= canvas.width || y < 0 || y >= canvas.height) return;
 
-      if (
-        x < 0 || x >= canvas.width
-        || y < 0 || y >= canvas.height
-      ) return;
-
-      const col = x < split.x ? 0 : 1;
-      const row = y < split.y ? 0 : 1;
-
-      const view = Object.keys(QUADRANTS).find(
-        (key) => {
-          const [c, r] = QUADRANTS[key];
-          return c === col && r === row;
-        }
-      );
-
+      const col = x < split.x ? 0 : 1; const row = y < split.y ? 0 : 1;
+      const view = Object.keys(QUADRANTS).find(k => QUADRANTS[k][0] === col && QUADRANTS[k][1] === row);
       const expected = VIEW_ORDER[placement.nextIndex];
-      if (view !== expected) {
-        status(`Click in the ${LABELS[expected]} view next.`);
-        return;
-      }
+
+      if (view !== expected) { status(`Click in the ${LABELS[expected]} view next.`); return; }
 
       const area = bounds(view);
-
       placement.point.clicks[view] = [
         Number(((x - area.left) / area.width).toFixed(5)),
         Number(((y - area.top) / area.height).toFixed(5))
       ];
 
       placement.nextIndex += 1;
-
       if (placement.nextIndex === VIEW_ORDER.length) {
-        placement = null;
-        $("cancelPlacement").hidden = true;
-        status("Point placed in all four views.");
-        persist();
+        placement = null; $("cancelPlacement").hidden = true; status("Point placed in all views."); persist();
       } else {
-        const next = VIEW_ORDER[placement.nextIndex];
-        status(`Now click in the ${LABELS[next]} view.`);
+        status(`Now click in the ${LABELS[VIEW_ORDER[placement.nextIndex]]} view.`);
       }
-
       draw();
     });
 
-    for (const [selectId, key] of [
-      ["vehicleReference", "vehicle"],
-      ["inertialReference", "inertial"]
-    ]) {
-      $(selectId).addEventListener("change", (event) => {
-        progress.references[key] = event.target.value || null;
+    ["vehicleReference", "inertialReference"].forEach(id => {
+      $(id).addEventListener("change", (e) => {
+        const key = id === "vehicleReference" ? "vehicle" : "inertial";
+        progress.step0.references[key] = e.target.value || null;
         persist();
       });
-    }
+    });
 
+    // --- Assumptions ---
     function resetAssumptionForm() {
       editAssumptionIndex = null;
-
-      for (const id of ["assumption", "why", "reasonable"]) {
-        $(id).value = "";
-      }
-
+      ["assumption", "why", "reasonable"].forEach(id => $(id).value = "");
       $("saveAssumption").textContent = "Add assumption";
       $("cancelEdit").hidden = true;
     }
@@ -728,54 +516,35 @@
     function renderAssumptions() {
       const log = $("assumptionsLog");
       log.replaceChildren();
-
-      progress.assumptions.forEach((item, index) => {
+      progress.step0.assumptions.forEach((item, index) => {
         const card = document.createElement("div");
         card.className = "assumption";
-
         const heading = document.createElement("strong");
         heading.textContent = `Assumption ${index + 1}`;
-
         card.append(heading);
 
-        for (const [title, key] of [
-          ["Assumption", "assumption"],
-          ["Why", "why"],
-          ["Reasonable because", "reasonable"]
-        ]) {
-          const paragraph = document.createElement("p");
+        [["Assumption", "assumption"], ["Why", "why"], ["Reasonable because", "reasonable"]].forEach(([title, key]) => {
+          const p = document.createElement("p");
           const label = document.createElement("strong");
           label.textContent = `${title}: `;
-
-          paragraph.append(
-            label,
-            document.createTextNode(item[key] || "")
-          );
-
-          card.append(paragraph);
-        }
+          p.append(label, document.createTextNode(item[key] || ""));
+          card.append(p);
+        });
 
         const edit = document.createElement("button");
         edit.textContent = "Edit";
         edit.addEventListener("click", () => {
           editAssumptionIndex = index;
-
-          for (const id of ["assumption", "why", "reasonable"]) {
-            $(id).value = item[id] || "";
-          }
-
+          ["assumption", "why", "reasonable"].forEach(id => $(id).value = item[id] || "");
           $("saveAssumption").textContent = "Save changes";
           $("cancelEdit").hidden = false;
-          $("assumption").focus();
         });
 
         const remove = document.createElement("button");
         remove.textContent = "Delete";
         remove.addEventListener("click", () => {
-          progress.assumptions.splice(index, 1);
-          resetAssumptionForm();
-          renderAssumptions();
-          persist();
+          progress.step0.assumptions.splice(index, 1);
+          resetAssumptionForm(); renderAssumptions(); persist();
         });
 
         card.append(edit, remove);
@@ -784,136 +553,48 @@
     }
 
     $("saveAssumption").addEventListener("click", () => {
-      const item = {
-        assumption: $("assumption").value.trim(),
-        why: $("why").value.trim(),
-        reasonable: $("reasonable").value.trim()
-      };
-
-      if (Object.values(item).some((value) => !value)) {
-        status("Complete all three assumption fields.");
-        return;
-      }
-
-      if (editAssumptionIndex === null) {
-        progress.assumptions.push(item);
-      } else {
-        progress.assumptions[editAssumptionIndex] = item;
-      }
-
-      resetAssumptionForm();
-      renderAssumptions();
-      persist();
-      status("Assumption saved.");
+      const item = { assumption: $("assumption").value.trim(), why: $("why").value.trim(), reasonable: $("reasonable").value.trim() };
+      if (Object.values(item).some(v => !v)) { status("Complete all three fields."); return; }
+      
+      if (editAssumptionIndex === null) progress.step0.assumptions.push(item);
+      else progress.step0.assumptions[editAssumptionIndex] = item;
+      
+      resetAssumptionForm(); renderAssumptions(); persist(); status("Assumption saved.");
     });
+    
+    $("cancelEdit").addEventListener("click", resetAssumptionForm);
 
-    $("cancelEdit").addEventListener(
-      "click", resetAssumptionForm
-    );
-
-    $("saveProgress").addEventListener("click", () => {
-      persist();
-      status("Progress saved in this browser.");
-    });
-
+    // --- Export / Import ---
+    $("saveProgress").addEventListener("click", () => { persist(); status("Progress saved in this browser."); });
     $("exportProgress").addEventListener("click", () => {
       persist();
-
-      const blob = new Blob(
-        [JSON.stringify(progress, null, 2)],
-        { type: "application/json" }
-      );
-
+      const blob = new Blob([JSON.stringify(progress, null, 2)], { type: "application/json" });
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
-      link.href = url;
-      link.download = "step0_progress.json";
-      link.click();
+      link.href = url; link.download = `${currentProblemId}_progress.json`; link.click();
       URL.revokeObjectURL(url);
     });
 
-    $("importProgress").addEventListener(
-      "change", async (event) => {
-        const file = event.target.files[0];
-        if (!file) return;
-
-        try {
-          const imported = JSON.parse(await file.text());
-
-          if (
-            !imported.frames
-            || !Array.isArray(imported.points)
-            || !Array.isArray(imported.assumptions)
-            || !imported.references
-          ) {
-            throw new Error("Invalid Step 0 file.");
-          }
-
-          placement = null;
-          selectedLabel = null;
-          $("cancelPlacement").hidden = true;
-
-          progress = imported;
-          persist();
-          refreshFrames();
-          renderPoints();
-          renderAssumptions();
-          draw();
-          status("Progress imported.");
-        } catch {
-          status("Could not import that Step 0 JSON file.");
-        }
-
-        event.target.value = "";
-      }
-    );
-
-    async function initialize() {
-      refreshFrames();
-      renderPoints();
-      renderAssumptions();
-
+    $("importProgress").addEventListener("change", async (event) => {
+      const file = event.target.files[0];
+      if (!file) return;
       try {
-        const response = await fetch("problem_config.json");
-        const problem = await response.json();
+        const imported = JSON.parse(await file.text());
+        if (!imported.step0 || !imported.step1) throw new Error("Invalid format.");
+        
+        placement = null; selectedLabel = null; $("cancelPlacement").hidden = true;
+        progress = imported;
+        persist();
+        refreshStep0UI();
+        refreshStep1UI();
+        draw();
+        status("Progress imported.");
+      } catch { status("Could not import that JSON file."); }
+      event.target.value = "";
+    });
 
-        if (!response.ok) {
-          throw new Error(problem.error || "Problem unavailable.");
-        }
-
-        image = new Image();
-        image.onload = () => {
-          canvas.width = image.naturalWidth;
-          canvas.height = image.naturalHeight;
-
-          const requested =
-            problem.quadrant_intersection || {};
-
-          const x = Number(requested.x);
-          const y = Number(requested.y);
-
-          split = {
-            x: x > 0 && x < canvas.width
-              ? x : canvas.width / 2,
-            y: y > 0 && y < canvas.height
-              ? y : canvas.height / 2
-          };
-
-          draw();
-          status("Problem image loaded.");
-        };
-
-        image.onerror = () => {
-          status("Could not load Vehicle_Image.png.");
-        };
-
-        image.src = "Vehicle_Image.png";
-      } catch (error) {
-        status(error.message);
-      }
-    }
-
-    initialize();
+    // Start
+    loadProblemList();
   </script>
 </body>
 </html>
