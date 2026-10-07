@@ -19,7 +19,7 @@
     .panel { background: white; border: 1px solid #d8dce2; border-radius: 8px; padding: 14px; margin-bottom: 14px; }
     .layout { display: grid; grid-template-columns: minmax(0, 1fr) 290px; gap: 14px; align-items: start; }
     
-    #vehicleCanvas { display: block; width: 100%; height: auto; cursor: crosshair; background: #ddd; }
+    canvas { display: block; width: 100%; height: auto; cursor: crosshair; background: #ddd; }
     input, select, textarea, button { font: inherit; }
     input, select, textarea { box-sizing: border-box; padding: 7px; margin: 4px 5px 8px 0; max-width: 100%; }
     textarea { width: 100%; min-height: 80px; resize: vertical; }
@@ -38,7 +38,7 @@
     .hint { color: #555; font-size: 0.92rem; }
     
     /* Tabs */
-    .tabs { display: flex; gap: 10px; margin-bottom: 14px; }
+    .tabs { display: flex; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
     .tab { padding: 10px 20px; background: #ddd; cursor: pointer; border-radius: 5px; font-weight: bold; }
     .tab.active { background: #FA4616; color: white; }
     .view { display: none; }
@@ -61,7 +61,7 @@
     <div class="tabs">
       <div class="tab active" id="tab-step0">Step 0: Frames & Points</div>
       <div class="tab" id="tab-step1">Step 1: Hypothesize</div>
-      <div class="tab" id="tab-step2">Step 2: Geometry</div>
+      <div class="tab" id="tab-step2">Step 2: Basis Vectors</div>
     </div>
 
     <!-- ================= STEP 0 VIEW ================= -->
@@ -136,7 +136,7 @@
       </section>
     </div>
 
-     <!-- ================= STEP 2 VIEW ================= -->
+    <!-- ================= STEP 2 VIEW ================= -->
     <div id="view-step2" class="view">
       <div class="layout">
         <section class="panel">
@@ -153,12 +153,12 @@
 
           <h2>Position & Velocity Vector Formulation</h2>
           <div id="step2-equations" style="padding: 10px; background: #f9f9f9; border: 1px solid #ddd;">
-            <!-- Equations will be injected here via JS -->
+            <p><em>Equation generation will mirror Python logic here using KaTeX...</em></p>
           </div>
 
           <h2>Rotation Matrix (Inertial → Vehicle)</h2>
           <div id="step2-rotation" style="padding: 10px; background: #f9f9f9; border: 1px solid #ddd;">
-            <!-- Rotation matrix will be injected here via JS -->
+            <p><em>Rotation matrix will be injected here via JS...</em></p>
           </div>
         </section>
 
@@ -212,6 +212,11 @@
 
     const canvas = $("vehicleCanvas");
     const ctx = canvas.getContext("2d");
+    
+    const canvas2 = $("step2Canvas");
+    const ctx2 = canvas2.getContext("2d");
+    let vecPlacement = null;
+    let selectedVecIndex = null;
 
     function emptyProgress() {
       return {
@@ -225,6 +230,13 @@
           hypothesis: "",
           guidepost: "",
           difficulty: ""
+        },
+        step2: { 
+          vectors: [], 
+          vehDesc: "", 
+          ineDesc: "", 
+          eqVals: {}, 
+          rotVals: [["","",""],["","",""],["","",""]] 
         }
       };
     }
@@ -260,7 +272,7 @@
           await loadProblem(problems[0].id);
         }
       } catch (err) {
-        alert("Could not load problems.json. Please ensure it exists in the repository root.");
+        alert("Could not load problems.json. Please ensure it exists in the repository root alongside index.html.");
       }
     }
 
@@ -278,10 +290,12 @@
       // Populate UI with loaded state
       refreshStep0UI();
       refreshStep1UI();
+      refreshStep2UI();
 
       // Fetch assets
       image = null;
       ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx2.clearRect(0, 0, canvas2.width, canvas2.height);
       status("Loading image...");
 
       try {
@@ -292,6 +306,7 @@
         image.onload = () => {
           canvas.width = image.naturalWidth;
           canvas.height = image.naturalHeight;
+          
           const req = config.quadrant_intersection || {};
           const x = Number(req.x), y = Number(req.y);
           
@@ -300,6 +315,7 @@
             y: y > 0 && y < canvas.height ? y : canvas.height / 2
           };
           draw();
+          drawStep2();
           status("Problem loaded.");
         };
         image.onerror = () => status(`Could not load problems/${problemId}/Vehicle_Image.png`);
@@ -314,12 +330,22 @@
     // --- Tabs Logic ---
     $("tab-step0").addEventListener("click", () => switchTab(0));
     $("tab-step1").addEventListener("click", () => switchTab(1));
+    $("tab-step2").addEventListener("click", () => switchTab(2));
 
     function switchTab(step) {
       $("tab-step0").classList.toggle("active", step === 0);
       $("tab-step1").classList.toggle("active", step === 1);
+      $("tab-step2").classList.toggle("active", step === 2);
+      
       $("view-step0").classList.toggle("active", step === 0);
       $("view-step1").classList.toggle("active", step === 1);
+      $("view-step2").classList.toggle("active", step === 2);
+
+      if (step === 0) draw();
+      if (step === 2) {
+        refreshStep2UI();
+        drawStep2();
+      }
     }
 
     // --- Math & Rendering Helpers ---
@@ -334,6 +360,10 @@
     function frameName(type) {
       return type === "vehicle-fixed" ? progress.step0.frames.vehicle : progress.step0.frames.inertial;
     }
+
+    // ==========================================
+    //                 STEP 0
+    // ==========================================
 
     function refreshStep0UI() {
       $("inertialFrame").value = progress.step0.frames.inertial || "";
@@ -357,21 +387,6 @@
       renderAssumptions();
     }
 
-    function refreshStep1UI() {
-      $("step1-hypothesis").value = progress.step1.hypothesis || "";
-      $("step1-guidepost").value = progress.step1.guidepost || "";
-      $("step1-difficulty").value = progress.step1.difficulty || "";
-    }
-
-    // --- Step 1 Listeners ---
-    ["hypothesis", "guidepost", "difficulty"].forEach(id => {
-      $(`step1-${id}`).addEventListener("input", (e) => {
-        progress.step1[id] = e.target.value;
-        persist();
-      });
-    });
-
-    // --- Step 0 UI Functions ---
     function renderReferences() {
       for (const [type, selectId, key] of [["vehicle-fixed", "vehicleReference", "vehicle"], ["inertial-fixed", "inertialReference", "inertial"]]) {
         const select = $(selectId);
@@ -425,13 +440,13 @@
       renderReferences();
     }
 
-    function bounds(view) {
+    function bounds(view, currentCanvas) {
       const [col, row] = QUADRANTS[view];
       return {
         left: col === 0 ? 0 : split.x,
         top: row === 0 ? 0 : split.y,
-        width: col === 0 ? split.x : canvas.width - split.x,
-        height: row === 0 ? split.y : canvas.height - split.y
+        width: col === 0 ? split.x : currentCanvas.width - split.x,
+        height: row === 0 ? split.y : currentCanvas.height - split.y
       };
     }
 
@@ -450,26 +465,42 @@
 
       for (const point of progress.step0.points) {
         if (point.type !== "vehicle-fixed") continue;
+
         const color = point.type === "vehicle-fixed" ? "#FA4616" : "#003087";
 
         for (const [view, fractions] of Object.entries(point.clicks || {})) {
           if (!QUADRANTS[view]) continue;
-          const area = bounds(view);
-          const x = area.left + fractions[0] * area.width;
-          const y = area.top + fractions[1] * area.height;
+
+          const area = bounds(view, canvas);
+          const [xf, yf] = fractions;
+
+          const x = area.left + xf * area.width;
+          const y = area.top + yf * area.height;
 
           if (selectedLabel === point.label) {
-            ctx.strokeStyle = "#003087"; ctx.lineWidth = Math.max(3, radius / 2);
-            ctx.beginPath(); ctx.arc(x, y, radius + 6, 0, 2 * Math.PI); ctx.stroke();
+            ctx.strokeStyle = "#003087";
+            ctx.lineWidth = Math.max(3, radius / 2);
+            ctx.beginPath();
+            ctx.arc(x, y, radius + 6, 0, 2 * Math.PI);
+            ctx.stroke();
           }
+
           ctx.fillStyle = color;
-          ctx.beginPath(); ctx.arc(x, y, radius, 0, 2 * Math.PI); ctx.fill();
+          ctx.beginPath();
+          ctx.arc(x, y, radius, 0, 2 * Math.PI);
+          ctx.fill();
           ctx.fillText(point.label, x + radius + 4, y - radius);
         }
       }
     }
 
-    // --- Step 0 Events ---
+    function cancelPlacement() {
+      if (!placement) return;
+      progress.step0.points = progress.step0.points.filter(p => p !== placement.point);
+      placement = null; $("cancelPlacement").hidden = true; status("Point placement canceled.");
+      renderPoints(); draw(); persist();
+    }
+
     $("saveFrames").addEventListener("click", () => {
       const inertial = $("inertialFrame").value.trim();
       const vehicle = $("vehicleFrame").value.trim();
@@ -478,7 +509,7 @@
         return;
       }
       progress.step0.frames = { inertial, vehicle };
-      persist(); refreshStep0UI(); status("Frame names saved.");
+      persist(); refreshStep0UI(); renderPoints(); status("Frame names saved in this browser.");
     });
 
     $("addPoint").addEventListener("click", () => {
@@ -487,6 +518,7 @@
 
       const label = $("pointLabel").value.trim();
       const type = $("pointType").value;
+
       if (!/^[A-Za-z0-9_]{1,20}$/.test(label) || progress.step0.points.some(p => p.label === label)) {
         status("Enter a unique point label."); return;
       }
@@ -502,15 +534,11 @@
       } else {
         status(`Inertial-fixed point ${label} logged.`); persist();
       }
+
       renderPoints(); draw();
     });
 
-    $("cancelPlacement").addEventListener("click", () => {
-      if (!placement) return;
-      progress.step0.points = progress.step0.points.filter(p => p !== placement.point);
-      placement = null; $("cancelPlacement").hidden = true; status("Point placement canceled.");
-      renderPoints(); draw(); persist();
-    });
+    $("cancelPlacement").addEventListener("click", cancelPlacement);
 
     canvas.addEventListener("click", (event) => {
       if (!placement || !image || !split) return;
@@ -521,12 +549,12 @@
       if (x < 0 || x >= canvas.width || y < 0 || y >= canvas.height) return;
 
       const col = x < split.x ? 0 : 1; const row = y < split.y ? 0 : 1;
-      const view = Object.keys(QUADRANTS).find(k => QUADRANTS[k][0] === col && QUADRANTS[k][1] === row);
+      const view = Object.keys(QUADRANTS).find(key => QUADRANTS[key][0] === col && QUADRANTS[key][1] === row);
       const expected = VIEW_ORDER[placement.nextIndex];
-
+      
       if (view !== expected) { status(`Click in the ${LABELS[expected]} view next.`); return; }
 
-      const area = bounds(view);
+      const area = bounds(view, canvas);
       placement.point.clicks[view] = [
         Number(((x - area.left) / area.width).toFixed(5)),
         Number(((y - area.top) / area.height).toFixed(5))
@@ -534,7 +562,7 @@
 
       placement.nextIndex += 1;
       if (placement.nextIndex === VIEW_ORDER.length) {
-        placement = null; $("cancelPlacement").hidden = true; status("Point placed in all views."); persist();
+        placement = null; $("cancelPlacement").hidden = true; status("Point placed in all four views."); persist();
       } else {
         status(`Now click in the ${LABELS[VIEW_ORDER[placement.nextIndex]]} view.`);
       }
@@ -549,7 +577,6 @@
       });
     });
 
-    // --- Assumptions ---
     function resetAssumptionForm() {
       editAssumptionIndex = null;
       ["assumption", "why", "reasonable"].forEach(id => $(id).value = "");
@@ -598,7 +625,7 @@
 
     $("saveAssumption").addEventListener("click", () => {
       const item = { assumption: $("assumption").value.trim(), why: $("why").value.trim(), reasonable: $("reasonable").value.trim() };
-      if (Object.values(item).some(v => !v)) { status("Complete all three fields."); return; }
+      if (Object.values(item).some((value) => !value)) { status("Complete all three assumption fields."); return; }
       
       if (editAssumptionIndex === null) progress.step0.assumptions.push(item);
       else progress.step0.assumptions[editAssumptionIndex] = item;
@@ -608,75 +635,31 @@
     
     $("cancelEdit").addEventListener("click", resetAssumptionForm);
 
-    // --- Export / Import ---
-    $("saveProgress").addEventListener("click", () => { persist(); status("Progress saved in this browser."); });
-    $("exportProgress").addEventListener("click", () => {
-      persist();
-      const blob = new Blob([JSON.stringify(progress, null, 2)], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url; link.download = `${currentProblemId}_progress.json`; link.click();
-      URL.revokeObjectURL(url);
-    });
+    // ==========================================
+    //                 STEP 1
+    // ==========================================
 
-    $("importProgress").addEventListener("change", async (event) => {
-      const file = event.target.files[0];
-      if (!file) return;
-      try {
-        const imported = JSON.parse(await file.text());
-        if (!imported.step0 || !imported.step1) throw new Error("Invalid format.");
-        
-        placement = null; selectedLabel = null; $("cancelPlacement").hidden = true;
-        progress = imported;
+    function refreshStep1UI() {
+      $("step1-hypothesis").value = progress.step1.hypothesis || "";
+      $("step1-guidepost").value = progress.step1.guidepost || "";
+      $("step1-difficulty").value = progress.step1.difficulty || "";
+    }
+
+    ["hypothesis", "guidepost", "difficulty"].forEach(id => {
+      $(`step1-${id}`).addEventListener("input", (e) => {
+        progress.step1[id] = e.target.value;
         persist();
-        refreshStep0UI();
-        refreshStep1UI();
-        draw();
-        status("Progress imported.");
-      } catch { status("Could not import that JSON file."); }
-      event.target.value = "";
+      });
     });
 
-
-
-        // Add step2 to emptyProgress
-    function emptyProgress() {
-      return {
-        step0: { frames: { inertial: "", vehicle: "" }, points: [], assumptions: [], references: { inertial: null, vehicle: null } },
-        step1: { hypothesis: "", guidepost: "", difficulty: "" },
-        step2: { vectors: [], vehDesc: "", ineDesc: "", eqVals: {}, rotVals: [["","",""],["","",""],["","",""]] }
-      };
-    }
-
-    // Tab switching update
-    $("tab-step2").addEventListener("click", () => switchTab(2));
-
-    function switchTab(step) {
-      $("tab-step0").classList.toggle("active", step === 0);
-      $("tab-step1").classList.toggle("active", step === 1);
-      $("tab-step2").classList.toggle("active", step === 2);
-      
-      $("view-step0").classList.toggle("active", step === 0);
-      $("view-step1").classList.toggle("active", step === 1);
-      $("view-step2").classList.toggle("active", step === 2);
-
-      if (step === 2) {
-        refreshStep2UI();
-        drawStep2();
-      }
-    }
-
-    // --- STEP 2 LOGIC ---
-    const canvas2 = $("step2Canvas");
-    const ctx2 = canvas2.getContext("2d");
-    let vecPlacement = null;
-    let selectedVecIndex = null;
+    // ==========================================
+    //                 STEP 2
+    // ==========================================
 
     function refreshStep2UI() {
       $("vehDesc").value = progress.step2.vehDesc || "";
       $("ineDesc").value = progress.step2.ineDesc || "";
       renderVectorsLog();
-      renderStep2Equations();
     }
 
     ["vehDesc", "ineDesc"].forEach(id => {
@@ -687,12 +670,13 @@
     });
 
     $("addVecBtn").addEventListener("click", () => {
+      if (vecPlacement) { $("step2-status").textContent = "Finish placing the current vector first."; return; }
       const name = $("vecName").value.trim();
       const type = $("vecFrame").value;
-      if (!name) return status("Enter a vector name.");
+      if (!name) return $("step2-status").textContent = "Enter a vector name.";
       
       const count = progress.step2.vectors.filter(v => v.type === type).length;
-      if (count >= 3) return status("Max 3 vectors per frame.");
+      if (count >= 3) return $("step2-status").textContent = "Max 3 vectors per frame.";
 
       const vec = { name, type, base: null, tip: null, view: null };
       progress.step2.vectors.push(vec);
@@ -731,9 +715,8 @@
           progress.step2.vectors.splice(idx, 1);
           if (selectedVecIndex === idx) selectedVecIndex = null;
           vecPlacement = null;
-          $("step2-status").textContent = "";
+          $("step2-status").textContent = "Vector deleted.";
           renderVectorsLog();
-          renderStep2Equations();
           drawStep2();
           persist();
         });
@@ -743,15 +726,6 @@
       });
     }
 
-    function renderStep2Equations() {
-      // Logic for dynamically rendering the KaTeX equations and input boxes 
-      // (similar to the Matplotlib logic, but using HTML inputs mixed with KaTeX spans)
-      const eqDiv = $("step2-equations");
-      eqDiv.innerHTML = "<p><em>Equation generation will mirror Python logic here using KaTeX...</em></p>";
-      // We will expand this specific math-builder block next!
-    }
-
-    // Step 2 Canvas Drawing & Clicking
     canvas2.addEventListener("click", (e) => {
       if (!vecPlacement || !image || !split) return;
       
@@ -760,7 +734,7 @@
       const y = (e.clientY - rect.top) * canvas2.height / rect.height;
       const col = x < split.x ? 0 : 1; const row = y < split.y ? 0 : 1;
       const view = Object.keys(QUADRANTS).find(k => QUADRANTS[k][0] === col && QUADRANTS[k][1] === row);
-      const area = bounds(view);
+      const area = bounds(view, canvas2);
       
       const xf = (x - area.left) / area.width;
       const yf = (y - area.top) / area.height;
@@ -771,15 +745,42 @@
         vecPlacement.step = 2;
         $("step2-status").textContent = "Base placed. Click to place the TIP in the same quadrant.";
       } else if (vecPlacement.step === 2) {
-        if (view !== vecPlacement.vec.view) return $("step2-status").textContent = "Must be in the same quadrant!";
+        if (view !== vecPlacement.vec.view) {
+          $("step2-status").textContent = "Tip must be in the same quadrant! Try again.";
+          return;
+        }
         vecPlacement.vec.tip = [xf, yf];
         vecPlacement = null;
         $("step2-status").textContent = "Vector saved.";
         renderVectorsLog();
-        renderStep2Equations();
         persist();
       }
       drawStep2();
+    });
+
+    canvas2.addEventListener("mousemove", (e) => {
+      if (!vecPlacement || vecPlacement.step !== 2 || !image || !split) return;
+      
+      const rect = canvas2.getBoundingClientRect();
+      const x = (e.clientX - rect.left) * canvas2.width / rect.width;
+      const y = (e.clientY - rect.top) * canvas2.height / rect.height;
+      
+      drawStep2(); // Redraw base state
+      
+      const color = vecPlacement.vec.type === "vehicle-fixed" ? "#FA4616" : "#003087";
+      const area = bounds(vecPlacement.vec.view, canvas2);
+      const startX = area.left + vecPlacement.vec.base[0] * area.width;
+      const startY = area.top + vecPlacement.vec.base[1] * area.height;
+
+      ctx2.strokeStyle = color; ctx2.fillStyle = color; ctx2.lineWidth = 3;
+      ctx2.beginPath(); ctx2.moveTo(startX, startY); ctx2.lineTo(x, y); ctx2.stroke();
+      
+      const angle = Math.atan2(y - startY, x - startX);
+      ctx2.beginPath();
+      ctx2.moveTo(x, y);
+      ctx2.lineTo(x - 12 * Math.cos(angle - 0.5), y - 12 * Math.sin(angle - 0.5));
+      ctx2.lineTo(x - 12 * Math.cos(angle + 0.5), y - 12 * Math.sin(angle + 0.5));
+      ctx2.fill();
     });
 
     function drawStep2() {
@@ -789,16 +790,15 @@
       ctx2.clearRect(0, 0, canvas2.width, canvas2.height);
       ctx2.drawImage(image, 0, 0);
 
-      // Draw Quadrant Lines
       ctx2.strokeStyle = "#555"; ctx2.lineWidth = 2;
       ctx2.beginPath(); ctx2.moveTo(split.x, 0); ctx2.lineTo(split.x, canvas2.height);
       ctx2.moveTo(0, split.y); ctx2.lineTo(canvas2.width, split.y); ctx2.stroke();
 
-      // Ghost Step 0 points
       progress.step0.points.forEach(pt => {
-        const color = pt.type === "vehicle-fixed" ? "rgba(250, 70, 22, 0.6)" : "rgba(0, 48, 135, 0.6)";
+        const color = pt.type === "vehicle-fixed" ? "rgba(250, 70, 22, 0.4)" : "rgba(0, 48, 135, 0.4)";
         for (const [view, fracs] of Object.entries(pt.clicks || {})) {
-          const area = bounds(view);
+          if (!QUADRANTS[view]) continue;
+          const area = bounds(view, canvas2);
           const x = area.left + fracs[0] * area.width;
           const y = area.top + fracs[1] * area.height;
           ctx2.fillStyle = color;
@@ -806,11 +806,10 @@
         }
       });
 
-      // Draw Vectors
       progress.step2.vectors.forEach((vec, idx) => {
         if (!vec.base || !vec.tip) return;
         const color = vec.type === "vehicle-fixed" ? "#FA4616" : "#003087";
-        const area = bounds(vec.view);
+        const area = bounds(vec.view, canvas2);
         
         const startX = area.left + vec.base[0] * area.width;
         const startY = area.top + vec.base[1] * area.height;
@@ -825,30 +824,53 @@
           ctx2.shadowBlur = 0;
         }
 
-        // Draw Line
         ctx2.beginPath(); ctx2.moveTo(startX, startY); ctx2.lineTo(endX, endY); ctx2.stroke();
         
-        // Draw Arrowhead
         const angle = Math.atan2(endY - startY, endX - startX);
         ctx2.beginPath();
         ctx2.moveTo(endX, endY);
         ctx2.lineTo(endX - 12 * Math.cos(angle - 0.5), endY - 12 * Math.sin(angle - 0.5));
         ctx2.lineTo(endX - 12 * Math.cos(angle + 0.5), endY - 12 * Math.sin(angle + 0.5));
         ctx2.fill();
-        ctx2.shadowBlur = 0; // reset
+        ctx2.shadowBlur = 0;
       });
     }
 
-    // Override original loadProblem to trigger Step 2 draw
-    const originalLoadProblem = loadProblem;
-    loadProblem = async function(pid) {
-      await originalLoadProblem(pid);
-      drawStep2();
-    }
+    // --- Save & Export ---
+    $("saveProgress").addEventListener("click", () => { persist(); status("Progress saved in this browser."); });
+    
+    $("exportProgress").addEventListener("click", () => {
+      persist();
+      const blob = new Blob([JSON.stringify(progress, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url; link.download = `${currentProblemId}_progress.json`; link.click();
+      URL.revokeObjectURL(url);
+    });
 
-
-
-
+    $("importProgress").addEventListener("change", async (event) => {
+      const file = event.target.files[0];
+      if (!file) return;
+      try {
+        const imported = JSON.parse(await file.text());
+        if (!imported.step0 || !imported.step1) throw new Error("Invalid format.");
+        
+        placement = null; selectedLabel = null; vecPlacement = null; selectedVecIndex = null;
+        $("cancelPlacement").hidden = true;
+        
+        progress = imported;
+        if(!progress.step2) progress.step2 = emptyProgress().step2; // Fallback for older saves
+        
+        persist();
+        refreshStep0UI();
+        refreshStep1UI();
+        refreshStep2UI();
+        draw();
+        drawStep2();
+        status("Progress imported.");
+      } catch { status("Could not import that JSON file."); }
+      event.target.value = "";
+    });
 
     // Start
     loadProblemList();
