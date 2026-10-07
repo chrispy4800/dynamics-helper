@@ -8,9 +8,7 @@
   <!-- Math rendering -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
-
-  <!-- Plotly for 3D Graphing -->
-  <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+  
 
   <style>
     :root { font-family: Arial, sans-serif; color: #222; background: #f3f4f6; }
@@ -663,7 +661,6 @@
       $("vehDesc").value = progress.step2.vehDesc || "";
       $("ineDesc").value = progress.step2.ineDesc || "";
       renderVectorsLog();
-      renderStep2Equations();
     }
 
     ["vehDesc", "ineDesc"].forEach(id => {
@@ -838,63 +835,6 @@
         ctx2.fill();
         ctx2.shadowBlur = 0;
       });
-    }
-
-     function renderStep2Equations() {
-      const ineRef = progress.step0.references.inertial || "I";
-      const vf = progress.step0.frames.vehicle || "B";
-      const inf = progress.step0.frames.inertial || "N";
-
-      const vehPts = progress.step0.points.filter(p => p.type === "vehicle-fixed").map(p => p.label);
-      const ineVecs = progress.step2.vectors.filter(v => v.type === "inertial-fixed").map(v=>v.name);
-      const vehVecs = progress.step2.vectors.filter(v => v.type === "vehicle-fixed").map(v=>v.name);
-      
-      while(ineVecs.length < 3) ineVecs.push("I_" + (ineVecs.length+1));
-      while(vehVecs.length < 3) vehVecs.push("V_" + (vehVecs.length+1));
-
-      // 1. Standard Vectors
-      createEqRow(eqDiv, `\\vec{r}_{${vehRef}/${ineRef}} =`, progress.step2.eqVals.r, ineVecs, "#003087", persist);
-      createEqRow(eqDiv, `\\vec{\\theta}_{\\tilde{${vf}}/\\tilde{${inf}}} =`, progress.step2.eqVals.theta, ineVecs, "#003087", persist);
-      createEqRow(eqDiv, `^{\\tilde{${inf}}}\\vec{v}_{${vehRef}/${ineRef}} =`, progress.step2.eqVals.v, ineVecs, "#003087", persist);
-      createEqRow(eqDiv, `^{\\tilde{${inf}}}\\vec{\\omega}_{\\tilde{${vf}}/\\tilde{${inf}}} =`, progress.step2.eqVals.omega, ineVecs, "#003087", persist);
-
-      // 2. Geometry of Vehicle
-      const geomHeader = document.createElement("h4");
-      geomHeader.textContent = "Geometry of the Vehicle";
-      eqDiv.appendChild(geomHeader);
-
-      vehPts.forEach(pt => {
-        if (!progress.step2.geomVals[pt]) progress.step2.geomVals[pt] = ["","",""];
-        createEqRow(eqDiv, `\\vec{r}_{${pt}/${vehRef}} =`, progress.step2.geomVals[pt], vehVecs, "#FA4616", persist);
-      });
-
-      // 3. Rotation Matrix
-      const rRow = document.createElement("div");
-      rRow.style.display = "flex";
-      const rLbl = document.createElement("div");
-      math(rLbl, `\\mathcal{R}_{\\tilde{${vf}}/\\tilde{${inf}}} =`);
-      rLbl.style.width = "100px"; rLbl.style.marginTop = "10px";
-      rRow.appendChild(rLbl);
-
-      const rMat = document.createElement("div");
-      for(let i=0; i<3; i++) {
-        const tr = document.createElement("div");
-        tr.style.display = "flex"; tr.style.marginBottom = "5px";
-        for(let j=0; j<3; j++) {
-          const inp = document.createElement("input");
-          inp.style.width = "50px"; inp.style.margin = "0 5px";
-          inp.value = progress.step2.rotVals[i][j];
-          inp.addEventListener("input", (e) => { progress.step2.rotVals[i][j] = e.target.value; persist(); });
-          tr.appendChild(inp);
-          const tLbl = document.createElement("div");
-          math(tLbl, `\\hat{${vehVecs[i]}}\\hat{${ineVecs[j]}}^\\top ${i<2||j<2 ? '+' : ''}`);
-          tLbl.style.marginRight = "10px";
-          tr.appendChild(tLbl);
-        }
-        rMat.appendChild(tr);
-      }
-      rRow.appendChild(rMat);
-      rotDiv.appendChild(rRow);
     }
 
     // --- Save & Export ---
