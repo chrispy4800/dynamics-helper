@@ -66,6 +66,7 @@
       <div class="tab active" id="tab-step0">Step 0: Frames & Points</div>
       <div class="tab" id="tab-step1">Step 1: Hypothesize</div>
       <div class="tab" id="tab-step2">Step 2: Basis Vectors</div>
+      <div class="tab" id="tab-step3">Step 3: Mass & Inertia</div>
     </div>
 
     <!-- ================= STEP 0 VIEW ================= -->
@@ -179,6 +180,29 @@
           <h2>Vectors Log</h2>
           <div id="vectorsLog"></div>
           <p class="hint" style="margin-top: 15px;">Orange: Vehicle basis<br>Blue: Inertial basis</p>
+        </aside>
+      </div>
+    </div>
+
+    <!-- ================= STEP 3 VIEW ================= -->
+    <div id="view-step3" class="view">
+      <div class="layout">
+        <section class="panel">
+          <h2>Vehicle 3D Geometry</h2>
+          <button id="refreshPlotBtn" class="secondary">🔄 Refresh 3D Plot</button>
+          <div id="step3Plot" style="width:100%; height:450px; background: #eaeaea; margin-top: 10px;"></div>
+          <p class="hint">Orange = Vehicle points. Black ⊕ = Center of Mass.</p>
+        </section>
+
+        <aside class="panel" style="max-height: 700px; overflow-y: auto;">
+          <h2>0th Moment (Mass)</h2>
+          <div id="step3-masses"></div>
+          
+          <h2>1st Moment (Center of Mass)</h2>
+          <div id="step3-com"></div>
+
+          <h2>2nd Moment (Inertia Tensors)</h2>
+          <div id="step3-inertia"></div>
         </aside>
       </div>
     </div>
@@ -305,15 +329,18 @@
     $("tab-step0").addEventListener("click", () => switchTab(0));
     $("tab-step1").addEventListener("click", () => switchTab(1));
     $("tab-step2").addEventListener("click", () => switchTab(2));
+    $("tab-step3").addEventListener("click", () => switchTab(3));
 
     function switchTab(step) {
-      [0,1,2].forEach(i => {
+      [0,1,2,3].forEach(i => {
         $(`tab-step${i}`).classList.toggle("active", step === i);
         $(`view-step${i}`).classList.toggle("active", step === i);
       });
       if (step === 0) draw();
       if (step === 2) { refreshStep2UI(); drawStep2(); }
+      if (step === 3) { refreshStep3UI(); drawStep3Plot(); }
     }
+
 
     // --- Math & Rendering Helpers ---
     function math(element, expression) {
@@ -888,6 +915,124 @@
       }
       rRow.appendChild(rMat);
       rotDiv.appendChild(rRow);
+    }
+
+    // ==========================================
+    //                 STEP 3
+    // ==========================================
+    $("refreshPlotBtn").addEventListener("click", drawStep3Plot);
+
+    function refreshStep3UI() {
+      const mDiv = $("step3-masses"); const cDiv = $("step3-com"); const iDiv = $("step3-inertia");
+      mDiv.innerHTML = ""; cDiv.innerHTML = ""; iDiv.innerHTML = "";
+
+      const vehPts = progress.step0.points.filter(p => p.type === "vehicle-fixed").map(p => p.label);
+      const vehVecs = progress.step2.vectors.filter(v => v.type === "vehicle-fixed").map(v=>v.name);
+      while(vehVecs.length < 3) vehVecs.push("V_" + (vehVecs.length+1));
+      const vehRef = progress.step0.references.vehicle || "V";
+      const vf = progress.step0.frames.vehicle || "B";
+
+      // 0th Moment (Masses)
+      vehPts.forEach(pt => {
+        const row = document.createElement("div"); row.style.marginBottom = "5px";
+        const lbl = document.createElement("span"); math(lbl, `m_{${pt}} = `);
+        const inp = document.createElement("input"); inp.style.width = "80px"; inp.style.marginLeft = "10px";
+        inp.value = progress.step3.masses[pt] || "";
+        inp.addEventListener("input", (e) => { progress.step3.masses[pt] = e.target.value; persist(); });
+        row.append(lbl, inp); mDiv.appendChild(row);
+      });
+      const tRow = document.createElement("div"); tRow.style.marginTop = "10px";
+      const tLbl = document.createElement("span"); math(tLbl, `M_{total} = `);
+      const tInp = document.createElement("input"); tInp.style.width = "80px"; tInp.style.marginLeft = "10px";
+      tInp.value = progress.step3.totalMass;
+      tInp.addEventListener("input", (e) => { progress.step3.totalMass = e.target.value; persist(); });
+      tRow.append(tLbl, tInp); mDiv.appendChild(tRow);
+
+      // 1st Moment (COM)
+      createEqRow(cDiv, `\\vec{r}_{C/${vehRef}} =`, progress.step3.r_com, vehVecs, "#FA4616", persist);
+      vehPts.forEach(pt => {
+        if (!progress.step3.r_p_com[pt]) progress.step3.r_p_com[pt] = ["","",""];
+        createEqRow(cDiv, `\\vec{r}_{${pt}/C} =`, progress.step3.r_p_com[pt], vehVecs, "#FA4616", persist);
+      });
+
+      // 2nd Moment (Inertia)
+      function createDyadic(parent, labelTex, dataArr, onChange) {
+        const row = document.createElement("div"); row.style.display = "flex"; row.style.marginBottom = "15px";
+        const lbl = document.createElement("div"); lbl.style.width = "100px"; math(lbl, labelTex); row.appendChild(lbl);
+        const mat = document.createElement("div");
+        for(let i=0; i<3; i++) {
+          const tr = document.createElement("div"); tr.style.display = "flex"; tr.style.marginBottom = "5px";
+          for(let j=0; j<3; j++) {
+            const inp = document.createElement("input"); inp.style.width = "40px"; inp.style.margin = "0 5px";
+            inp.value = dataArr[i][j] || "";
+            inp.addEventListener("input", (e) => { dataArr[i][j] = e.target.value; onChange(); });
+            tr.appendChild(inp);
+            const bLbl = document.createElement("div");
+            math(bLbl, `\\hat{${vehVecs[i]}}\\hat{${vehVecs[j]}}^\\top ${i<2||j<2 ? '+' : ''}`);
+            tr.appendChild(bLbl);
+          }
+          mat.appendChild(tr);
+        }
+        row.appendChild(mat); parent.appendChild(row);
+      }
+
+      vehPts.forEach(pt => {
+        if (!progress.step3.j_p[pt]) progress.step3.j_p[pt] = [["","",""],["","",""],["","",""]];
+        createDyadic(iDiv, `\\vec{J}_{${pt}/C} =`, progress.step3.j_p[pt], persist);
+      });
+      createDyadic(iDiv, `\\vec{J}_{\\tilde{${vf}}/C} =`, progress.step3.j_total, persist);
+    }
+
+    function drawStep3Plot() {
+      const traces = [];
+      const vehPts = progress.step0.points.filter(p => p.type === "vehicle-fixed").map(p => p.label);
+      
+      // Plot Points
+      const x=[], y=[], z=[], texts=[];
+      vehPts.forEach(pt => {
+        const coords = progress.step2.geomVals[pt];
+        if (coords) {
+          x.push(parseFloat(coords[0])||0); y.push(parseFloat(coords[1])||0); z.push(parseFloat(coords[2])||0);
+          texts.push(pt);
+        }
+      });
+      
+      traces.push({
+        x: x, y: y, z: z, mode: 'markers+text', text: texts, textposition: 'top right',
+        type: 'scatter3d', marker: { color: '#FA4616', size: 6 }
+      });
+
+      // Plot COM
+      const com = progress.step3.r_com.map(v => parseFloat(v));
+      if (!com.some(isNaN)) {
+        traces.push({
+          x: [com[0]], y: [com[1]], z: [com[2]], mode: 'markers+text', text: ['C'], textposition: 'top right',
+          type: 'scatter3d', marker: { color: 'black', size: 10, symbol: 'cross' }
+        });
+      }
+
+      // Plot Origin (*)
+      traces.push({
+        x: [0], y: [0], z: [0], mode: 'markers+text', text: ['*'], textposition: 'bottom center',
+        type: 'scatter3d', marker: { color: '#003087', size: 8 }
+      });
+
+      // Plot Axes Lines
+      const scale = Math.max(1, ...x.map(Math.abs), ...y.map(Math.abs), ...z.map(Math.abs)) * 0.7;
+      const vehVecs = progress.step2.vectors.filter(v => v.type === "vehicle-fixed").map(v=>v.name);
+      while(vehVecs.length < 3) vehVecs.push("V_" + (vehVecs.length+1));
+      const colors = ["#c62828", "#2e7d32", "#ad7800"];
+      
+      for(let i=0; i<3; i++) {
+        const dx = i===0?scale:0; const dy = i===1?scale:0; const dz = i===2?scale:0;
+        traces.push({
+          x: [0, dx], y: [0, dy], z: [0, dz], mode: 'lines+text', text: ['', vehVecs[i]], textposition: 'top center',
+          type: 'scatter3d', line: { color: colors[i], width: 5 }
+        });
+      }
+
+      const layout = { margin: { l: 0, r: 0, b: 0, t: 0 }, showlegend: false, scene: { aspectmode: 'data' }};
+      Plotly.newPlot('step3Plot', traces, layout);
     }
 
 
