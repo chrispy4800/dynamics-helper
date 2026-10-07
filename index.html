@@ -65,7 +65,6 @@
       <div class="tab active" id="tab-step0">Step 0: Frames & Points</div>
       <div class="tab" id="tab-step1">Step 1: Hypothesize</div>
       <div class="tab" id="tab-step2">Step 2: Basis Vectors</div>
-      <div class="tab" id="tab-step3">Step 3: Mass & Inertia</div>
     </div>
 
     <!-- ================= STEP 0 VIEW ================= -->
@@ -231,10 +230,9 @@
     $("tab-step0").addEventListener("click", () => switchTab(0));
     $("tab-step1").addEventListener("click", () => switchTab(1));
     $("tab-step2").addEventListener("click", () => switchTab(2));
-    $("tab-step3").addEventListener("click", () => switchTab(3));
 
     function switchTab(step) {
-      [0,1,2,3].forEach(i => {
+      [0,1,2].forEach(i => {
         $(`tab-step${i}`).classList.toggle("active", step === i);
         $(`view-step${i}`).classList.toggle("active", step === i);
       });
@@ -815,6 +813,7 @@
       rRow.appendChild(rMat);
       rotDiv.appendChild(rRow);
     }
+    
     
 
     // --- Save & Export ---
