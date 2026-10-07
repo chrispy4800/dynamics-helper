@@ -9,7 +9,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
 
-  <!-- Plotly for 3D Graphing -->
+    <!-- Plotly for 3D Graphing -->
   <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
 
   <style>
@@ -65,7 +65,6 @@
       <div class="tab active" id="tab-step0">Step 0: Frames & Points</div>
       <div class="tab" id="tab-step1">Step 1: Hypothesize</div>
       <div class="tab" id="tab-step2">Step 2: Basis Vectors</div>
-      <div class="tab" id="tab-step3">Step 3: Mass & Inertia</div>
     </div>
 
     <!-- ================= STEP 0 VIEW ================= -->
@@ -183,38 +182,6 @@
       </div>
     </div>
 
-        <div class="tabs">
-      <div class="tab active" id="tab-step0">Step 0: Frames & Points</div>
-      <div class="tab" id="tab-step1">Step 1: Hypothesize</div>
-      <div class="tab" id="tab-step2">Step 2: Basis Vectors</div>
-      <div class="tab" id="tab-step3">Step 3: Mass & Inertia</div>
-    </div>
-
-    <!-- ... (Keep view-step0, view-step1, and view-step2 exactly as they are) ... -->
-
-    <!-- ================= STEP 3 VIEW ================= -->
-    <div id="view-step3" class="view">
-      <div class="layout">
-        <section class="panel">
-          <h2>Vehicle 3D Geometry</h2>
-          <button id="refreshPlotBtn" class="secondary">🔄 Refresh 3D Plot</button>
-          <div id="step3Plot" style="width:100%; height:450px; background: #eaeaea; margin-top: 10px;"></div>
-          <p class="hint">Orange = Vehicle points. Black ⊕ = Center of Mass.</p>
-        </section>
-
-        <aside class="panel" style="max-height: 700px; overflow-y: auto;">
-          <h2>0th Moment (Mass)</h2>
-          <div id="step3-masses"></div>
-          
-          <h2>1st Moment (Center of Mass)</h2>
-          <div id="step3-com"></div>
-
-          <h2>2nd Moment (Inertia Tensors)</h2>
-          <div id="step3-inertia"></div>
-        </aside>
-      </div>
-    </div>
-
     <!-- ================= SAVE & EXPORT (Shared) ================= -->
     <section class="panel">
       <button id="saveProgress">Save in this browser</button>
@@ -232,15 +199,133 @@
   <script>
     "use strict";
 
-       // --- State & Constants ---
+    // --- State & Constants ---
+    const VIEW_ORDER = ["side", "front", "top", "3d"];
+    const QUADRANTS = { side: [0, 0], front: [1, 0], top: [0, 1], "3d": [1, 1] };
+    const LABELS = { side: "Side", front: "Front", top: "Top", "3d": "3D" };
+    const $ = (id) => document.getElementById(id);
+
+    let currentProblemId = null;
+    let progress = emptyProgress();
+    let selectedLabel = null;
+    let placement = null;
+    let editAssumptionIndex = null;
+    let image = null;
+    let split = null;
+
+    const canvas = $("vehicleCanvas");
+    const ctx = canvas.getContext("2d");
+    
+    const canvas2 = $("step2Canvas");
+    const ctx2 = canvas2.getContext("2d");
+    let vecPlacement = null;
+    let selectedVecIndex = null;
+
+    function emptyProgress() {
+      return {
+        step0: {
+          frames: { inertial: "", vehicle: "" },
+          points: [],
+          assumptions: [],
+          references: { inertial: null, vehicle: null }
+        },
+        step1: {
+          hypothesis: "",
+          guidepost: "",
+          difficulty: ""
+        },
+        step2: { 
+          vectors: [], 
+          vehDesc: "", 
+          ineDesc: "", 
+          eqVals: {}, 
+          rotVals: [["","",""],["","",""],["","",""]] 
+        }
+      };
+    }
+
+    function status(message) { $("status").textContent = message; }
+
+    function getStorageKey() {
+      return `dynamics-v1-${currentProblemId}`;
+    }
+
+    function persist() {
+      if (!currentProblemId) return;
+      try {
+        localStorage.setItem(getStorageKey(), JSON.stringify(progress));
+      } catch {
+        status("Browser storage failed. Download your progress JSON.");
+      }
+    }
+
+    // --- Loading System ---
+    async function loadProblemList() {
+      try {
+        const response = await fetch("problems.json");
+        const problems = await response.json();
+        const selector = $("problemSelector");
+        
+        problems.forEach(p => {
+          selector.add(new Option(p.name, p.id));
+        });
+
+        if (problems.length > 0) {
+          selector.value = problems[0].id;
+          await loadProblem(problems[0].id);
+        }
+      } catch (err) {
+        alert("Could not load problems.json. Please ensure it exists in the repository root alongside index.html.");
+      }
+    }
+
+    async function loadProblem(problemId) {
+      currentProblemId = problemId;
+      
+      // Load saved state
+      try {
+        const saved = JSON.parse(localStorage.getItem(getStorageKey()));
+        progress = saved && saved.step0 ? saved : emptyProgress();
+      } catch {
+        progress = emptyProgress();
+      }
+      
+      // Populate UI with loaded state
+      refreshStep0UI();
+      refreshStep1UI();
+      refreshStep2UI();
+
+      // Fetch assets
+      image = null;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx2.clearRect(0, 0, canvas2.width, canvas2.height);
+      status("Loading image...");
+
+      try {
+        const configRes = await fetch(`problems/${problemId}/problem_config.json`);
+        const config = configRes.ok ? await configRes.json() : {};
+        
+        image = new Image();
+        image.onload = () => {
+          canvas.width = image.naturalWidth;
+          canvas.height = image.naturalHeight;
+          
+          const req = config.quadrant_intersection || {};
+          const x = Number(req.x), y = Number(req.y);
+          
+          split = {
             x: x > 0 && x < canvas.width ? x : canvas.width / 2,
             y: y > 0 && y < canvas.height ? y : canvas.height / 2
           };
-          draw(); drawStep2();
+          draw();
+          drawStep2();
           status("Problem loaded.");
         };
+        image.onerror = () => status(`Could not load problems/${problemId}/Vehicle_Image.png`);
         image.src = `problems/${problemId}/Vehicle_Image.png`;
-      } catch (e) { status("Error loading problem assets."); }
+      } catch (e) {
+        status("Error loading problem assets.");
+      }
     }
 
     $("problemSelector").addEventListener("change", (e) => loadProblem(e.target.value));
@@ -249,16 +334,21 @@
     $("tab-step0").addEventListener("click", () => switchTab(0));
     $("tab-step1").addEventListener("click", () => switchTab(1));
     $("tab-step2").addEventListener("click", () => switchTab(2));
-    $("tab-step3").addEventListener("click", () => switchTab(3));
 
     function switchTab(step) {
-      [0,1,2,3].forEach(i => {
-        $(`tab-step${i}`).classList.toggle("active", step === i);
-        $(`view-step${i}`).classList.toggle("active", step === i);
-      });
+      $("tab-step0").classList.toggle("active", step === 0);
+      $("tab-step1").classList.toggle("active", step === 1);
+      $("tab-step2").classList.toggle("active", step === 2);
+      
+      $("view-step0").classList.toggle("active", step === 0);
+      $("view-step1").classList.toggle("active", step === 1);
+      $("view-step2").classList.toggle("active", step === 2);
+
       if (step === 0) draw();
-      if (step === 2) { refreshStep2UI(); drawStep2(); }
-      if (step === 3) { refreshStep3UI(); drawStep3Plot(); }
+      if (step === 2) {
+        refreshStep2UI();
+        drawStep2();
+      }
     }
 
     // --- Math & Rendering Helpers ---
@@ -270,30 +360,8 @@
       }
     }
 
-    function frameName(type) { return type === "vehicle-fixed" ? progress.step0.frames.vehicle : progress.step0.frames.inertial; }
-
-    function createEqRow(parent, labelTex, inputsArr, basisVecs, color, onChange) {
-      const row = document.createElement("div");
-      row.style.display = "flex"; row.style.alignItems = "center"; row.style.marginBottom = "8px";
-      
-      const lbl = document.createElement("div");
-      lbl.style.width = "140px";
-      math(lbl, labelTex);
-      row.appendChild(lbl);
-
-      for(let i=0; i<3; i++) {
-        const inp = document.createElement("input");
-        inp.style.width = "60px"; inp.style.margin = "0 5px"; inp.style.textAlign = "center";
-        inp.value = inputsArr[i] || "";
-        inp.addEventListener("input", (e) => { inputsArr[i] = e.target.value; onChange(); });
-        row.appendChild(inp);
-        
-        const bLbl = document.createElement("div");
-        math(bLbl, `\\hat{${basisVecs[i]}} ${i<2 ? '+' : ''}`);
-        bLbl.style.color = color;
-        row.appendChild(bLbl);
-      }
-      parent.appendChild(row);
+    function frameName(type) {
+      return type === "vehicle-fixed" ? progress.step0.frames.vehicle : progress.step0.frames.inertial;
     }
 
     // ==========================================
@@ -587,88 +655,227 @@
       });
     });
 
-// ==========================================
-        const row = document.createElement("div"); row.style.display = "flex"; row.style.marginBottom = "15px";
-        const lbl = document.createElement("div"); lbl.style.width = "100px"; math(lbl, labelTex); row.appendChild(lbl);
-        const mat = document.createElement("div");
-        for(let i=0; i<3; i++) {
-          const tr = document.createElement("div"); tr.style.display = "flex"; tr.style.marginBottom = "5px";
-          for(let j=0; j<3; j++) {
-            const inp = document.createElement("input"); inp.style.width = "40px"; inp.style.margin = "0 5px";
-            inp.value = dataArr[i][j] || "";
-            inp.addEventListener("input", (e) => { dataArr[i][j] = e.target.value; onChange(); });
-            tr.appendChild(inp);
-            const bLbl = document.createElement("div");
-            math(bLbl, `\\hat{${vehVecs[i]}}\\hat{${vehVecs[j]}}^\\top ${i<2||j<2 ? '+' : ''}`);
-            tr.appendChild(bLbl);
-          }
-          mat.appendChild(tr);
-        }
-        row.appendChild(mat); parent.appendChild(row);
-      }
+    // ==========================================
+    //                 STEP 2
+    // ==========================================
 
-      vehPts.forEach(pt => {
-        if (!progress.step3.j_p[pt]) progress.step3.j_p[pt] = [["","",""],["","",""],["","",""]];
-        createDyadic(iDiv, `\\vec{J}_{${pt}/C} =`, progress.step3.j_p[pt], persist);
-      });
-      createDyadic(iDiv, `\\vec{J}_{\\tilde{${vf}}/C} =`, progress.step3.j_total, persist);
+    function refreshStep2UI() {
+      $("vehDesc").value = progress.step2.vehDesc || "";
+      $("ineDesc").value = progress.step2.ineDesc || "";
+      renderVectorsLog();
     }
 
-    function drawStep3Plot() {
-      const traces = [];
-      const vehPts = progress.step0.points.filter(p => p.type === "vehicle-fixed").map(p => p.label);
-      
-      // Plot Points
-      const x=[], y=[], z=[], texts=[];
-      vehPts.forEach(pt => {
-        const coords = progress.step2.geomVals[pt];
-        if (coords) {
-          x.push(parseFloat(coords[0])||0); y.push(parseFloat(coords[1])||0); z.push(parseFloat(coords[2])||0);
-          texts.push(pt);
-        }
+    ["vehDesc", "ineDesc"].forEach(id => {
+      $(id).addEventListener("input", (e) => {
+        progress.step2[id] = e.target.value;
+        persist();
       });
-      
-      traces.push({
-        x: x, y: y, z: z, mode: 'markers+text', text: texts, textposition: 'top right',
-        type: 'scatter3d', marker: { color: '#FA4616', size: 6 }
-      });
+    });
 
-      // Plot COM
-      const com = progress.step3.r_com.map(v => parseFloat(v));
-      if (!com.some(isNaN)) {
-        traces.push({
-          x: [com[0]], y: [com[1]], z: [com[2]], mode: 'markers+text', text: ['C'], textposition: 'top right',
-          type: 'scatter3d', marker: { color: 'black', size: 10, symbol: 'cross' }
+    $("addVecBtn").addEventListener("click", () => {
+      if (vecPlacement) { $("step2-status").textContent = "Finish placing the current vector first."; return; }
+      const name = $("vecName").value.trim();
+      const type = $("vecFrame").value;
+      if (!name) return $("step2-status").textContent = "Enter a vector name.";
+      
+      const count = progress.step2.vectors.filter(v => v.type === type).length;
+      if (count >= 3) return $("step2-status").textContent = "Max 3 vectors per frame.";
+
+      const vec = { name, type, base: null, tip: null, view: null };
+      progress.step2.vectors.push(vec);
+      selectedVecIndex = progress.step2.vectors.length - 1;
+      $("vecName").value = "";
+      
+      vecPlacement = { vec, step: 1 };
+      $("step2-status").textContent = `Drawing ${name}: Click to place the BASE.`;
+      renderVectorsLog();
+      drawStep2();
+    });
+
+    function renderVectorsLog() {
+      const log = $("vectorsLog");
+      log.replaceChildren();
+      
+      progress.step2.vectors.forEach((vec, idx) => {
+        const row = document.createElement("div");
+        row.className = "point-row" + (selectedVecIndex === idx ? " selected" : "");
+        
+        const btn = document.createElement("button");
+        btn.className = "secondary";
+        btn.style.flex = "1";
+        btn.style.textAlign = "left";
+        math(btn, `\\hat{${vec.name}}\\quad\\tilde{${frameName(vec.type) || "?"}}`);
+        
+        btn.addEventListener("click", () => {
+          selectedVecIndex = selectedVecIndex === idx ? null : idx;
+          renderVectorsLog();
+          drawStep2();
         });
-      }
 
-      // Plot Origin (*)
-      traces.push({
-        x: [0], y: [0], z: [0], mode: 'markers+text', text: ['*'], textposition: 'bottom center',
-        type: 'scatter3d', marker: { color: '#003087', size: 8 }
-      });
-
-      // Plot Axes Lines
-      const scale = Math.max(1, ...x.map(Math.abs), ...y.map(Math.abs), ...z.map(Math.abs)) * 0.7;
-      const vehVecs = progress.step2.vectors.filter(v => v.type === "vehicle-fixed").map(v=>v.name);
-      while(vehVecs.length < 3) vehVecs.push("V_" + (vehVecs.length+1));
-      const colors = ["#c62828", "#2e7d32", "#ad7800"];
-      
-      for(let i=0; i<3; i++) {
-        const dx = i===0?scale:0; const dy = i===1?scale:0; const dz = i===2?scale:0;
-        traces.push({
-          x: [0, dx], y: [0, dy], z: [0, dz], mode: 'lines+text', text: ['', vehVecs[i]], textposition: 'top center',
-          type: 'scatter3d', line: { color: colors[i], width: 5 }
+        const delBtn = document.createElement("button");
+        delBtn.textContent = "Del";
+        delBtn.addEventListener("click", () => {
+          progress.step2.vectors.splice(idx, 1);
+          if (selectedVecIndex === idx) selectedVecIndex = null;
+          vecPlacement = null;
+          $("step2-status").textContent = "Vector deleted.";
+          renderVectorsLog();
+          drawStep2();
+          persist();
         });
-      }
 
-      const layout = { margin: { l: 0, r: 0, b: 0, t: 0 }, showlegend: false, scene: { aspectmode: 'data' }};
-      Plotly.newPlot('step3Plot', traces, layout);
+        row.append(btn, delBtn);
+        log.append(row);
+      });
     }
 
-    // --- SAVE / IMPORT SYSTEM (KEEP FROM PREVIOUS) ---
-    // [Ensure your Export/Import/Save logic from previous responses is pasted here]
+    canvas2.addEventListener("click", (e) => {
+      if (!vecPlacement || !image || !split) return;
+      
+      const rect = canvas2.getBoundingClientRect();
+      const x = (e.clientX - rect.left) * canvas2.width / rect.width;
+      const y = (e.clientY - rect.top) * canvas2.height / rect.height;
+      const col = x < split.x ? 0 : 1; const row = y < split.y ? 0 : 1;
+      const view = Object.keys(QUADRANTS).find(k => QUADRANTS[k][0] === col && QUADRANTS[k][1] === row);
+      const area = bounds(view, canvas2);
+      
+      const xf = (x - area.left) / area.width;
+      const yf = (y - area.top) / area.height;
 
+      if (vecPlacement.step === 1) {
+        vecPlacement.vec.view = view;
+        vecPlacement.vec.base = [xf, yf];
+        vecPlacement.step = 2;
+        $("step2-status").textContent = "Base placed. Click to place the TIP in the same quadrant.";
+      } else if (vecPlacement.step === 2) {
+        if (view !== vecPlacement.vec.view) {
+          $("step2-status").textContent = "Tip must be in the same quadrant! Try again.";
+          return;
+        }
+        vecPlacement.vec.tip = [xf, yf];
+        vecPlacement = null;
+        $("step2-status").textContent = "Vector saved.";
+        renderVectorsLog();
+        persist();
+      }
+      drawStep2();
+    });
+
+    canvas2.addEventListener("mousemove", (e) => {
+      if (!vecPlacement || vecPlacement.step !== 2 || !image || !split) return;
+      
+      const rect = canvas2.getBoundingClientRect();
+      const x = (e.clientX - rect.left) * canvas2.width / rect.width;
+      const y = (e.clientY - rect.top) * canvas2.height / rect.height;
+      
+      drawStep2(); // Redraw base state
+      
+      const color = vecPlacement.vec.type === "vehicle-fixed" ? "#FA4616" : "#003087";
+      const area = bounds(vecPlacement.vec.view, canvas2);
+      const startX = area.left + vecPlacement.vec.base[0] * area.width;
+      const startY = area.top + vecPlacement.vec.base[1] * area.height;
+
+      ctx2.strokeStyle = color; ctx2.fillStyle = color; ctx2.lineWidth = 3;
+      ctx2.beginPath(); ctx2.moveTo(startX, startY); ctx2.lineTo(x, y); ctx2.stroke();
+      
+      const angle = Math.atan2(y - startY, x - startX);
+      ctx2.beginPath();
+      ctx2.moveTo(x, y);
+      ctx2.lineTo(x - 12 * Math.cos(angle - 0.5), y - 12 * Math.sin(angle - 0.5));
+      ctx2.lineTo(x - 12 * Math.cos(angle + 0.5), y - 12 * Math.sin(angle + 0.5));
+      ctx2.fill();
+    });
+
+    function drawStep2() {
+      if (!image || !split) return;
+      canvas2.width = image.naturalWidth;
+      canvas2.height = image.naturalHeight;
+      ctx2.clearRect(0, 0, canvas2.width, canvas2.height);
+      ctx2.drawImage(image, 0, 0);
+
+      ctx2.strokeStyle = "#555"; ctx2.lineWidth = 2;
+      ctx2.beginPath(); ctx2.moveTo(split.x, 0); ctx2.lineTo(split.x, canvas2.height);
+      ctx2.moveTo(0, split.y); ctx2.lineTo(canvas2.width, split.y); ctx2.stroke();
+
+      progress.step0.points.forEach(pt => {
+        const color = pt.type === "vehicle-fixed" ? "rgba(250, 70, 22, 0.4)" : "rgba(0, 48, 135, 0.4)";
+        for (const [view, fracs] of Object.entries(pt.clicks || {})) {
+          if (!QUADRANTS[view]) continue;
+          const area = bounds(view, canvas2);
+          const x = area.left + fracs[0] * area.width;
+          const y = area.top + fracs[1] * area.height;
+          ctx2.fillStyle = color;
+          ctx2.beginPath(); ctx2.arc(x, y, 5, 0, Math.PI * 2); ctx2.fill();
+        }
+      });
+
+      progress.step2.vectors.forEach((vec, idx) => {
+        if (!vec.base || !vec.tip) return;
+        const color = vec.type === "vehicle-fixed" ? "#FA4616" : "#003087";
+        const area = bounds(vec.view, canvas2);
+        
+        const startX = area.left + vec.base[0] * area.width;
+        const startY = area.top + vec.base[1] * area.height;
+        const endX = area.left + vec.tip[0] * area.width;
+        const endY = area.top + vec.tip[1] * area.height;
+
+        ctx2.strokeStyle = color; ctx2.fillStyle = color; ctx2.lineWidth = 3;
+        
+        if (selectedVecIndex === idx) {
+          ctx2.shadowColor = color; ctx2.shadowBlur = 10;
+        } else {
+          ctx2.shadowBlur = 0;
+        }
+
+        ctx2.beginPath(); ctx2.moveTo(startX, startY); ctx2.lineTo(endX, endY); ctx2.stroke();
+        
+        const angle = Math.atan2(endY - startY, endX - startX);
+        ctx2.beginPath();
+        ctx2.moveTo(endX, endY);
+        ctx2.lineTo(endX - 12 * Math.cos(angle - 0.5), endY - 12 * Math.sin(angle - 0.5));
+        ctx2.lineTo(endX - 12 * Math.cos(angle + 0.5), endY - 12 * Math.sin(angle + 0.5));
+        ctx2.fill();
+        ctx2.shadowBlur = 0;
+      });
+    }
+
+    // --- Save & Export ---
+    $("saveProgress").addEventListener("click", () => { persist(); status("Progress saved in this browser."); });
+    
+    $("exportProgress").addEventListener("click", () => {
+      persist();
+      const blob = new Blob([JSON.stringify(progress, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url; link.download = `${currentProblemId}_progress.json`; link.click();
+      URL.revokeObjectURL(url);
+    });
+
+    $("importProgress").addEventListener("change", async (event) => {
+      const file = event.target.files[0];
+      if (!file) return;
+      try {
+        const imported = JSON.parse(await file.text());
+        if (!imported.step0 || !imported.step1) throw new Error("Invalid format.");
+        
+        placement = null; selectedLabel = null; vecPlacement = null; selectedVecIndex = null;
+        $("cancelPlacement").hidden = true;
+        
+        progress = imported;
+        if(!progress.step2) progress.step2 = emptyProgress().step2; // Fallback for older saves
+        
+        persist();
+        refreshStep0UI();
+        refreshStep1UI();
+        refreshStep2UI();
+        draw();
+        drawStep2();
+        status("Progress imported.");
+      } catch { status("Could not import that JSON file."); }
+      event.target.value = "";
+    });
+
+    // Start
     loadProblemList();
   </script>
 </body>
