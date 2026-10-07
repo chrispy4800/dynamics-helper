@@ -182,7 +182,6 @@
       </div>
     </div>
 
-
     <!-- ================= SAVE & EXPORT (Shared) ================= -->
     <section class="panel">
       <button id="saveProgress">Save in this browser</button>
@@ -201,6 +200,133 @@
     "use strict";
 
     // --- State & Constants ---
+    const VIEW_ORDER = ["side", "front", "top", "3d"];
+    const QUADRANTS = { side: [0, 0], front: [1, 0], top: [0, 1], "3d": [1, 1] };
+    const LABELS = { side: "Side", front: "Front", top: "Top", "3d": "3D" };
+    const $ = (id) => document.getElementById(id);
+
+    let currentProblemId = null;
+    let progress = emptyProgress();
+    let selectedLabel = null;
+    let placement = null;
+    let editAssumptionIndex = null;
+    let image = null;
+    let split = null;
+
+    const canvas = $("vehicleCanvas");
+    const ctx = canvas.getContext("2d");
+    
+    const canvas2 = $("step2Canvas");
+    const ctx2 = canvas2.getContext("2d");
+    let vecPlacement = null;
+    let selectedVecIndex = null;
+
+    function emptyProgress() {
+      return {
+        step0: {
+          frames: { inertial: "", vehicle: "" },
+          points: [],
+          assumptions: [],
+          references: { inertial: null, vehicle: null }
+        },
+        step1: {
+          hypothesis: "",
+          guidepost: "",
+          difficulty: ""
+        },
+        step2: { 
+          vectors: [], 
+          vehDesc: "", 
+          ineDesc: "", 
+          eqVals: {}, 
+          rotVals: [["","",""],["","",""],["","",""]] 
+        }
+      };
+    }
+
+    function status(message) { $("status").textContent = message; }
+
+    function getStorageKey() {
+      return `dynamics-v1-${currentProblemId}`;
+    }
+
+    function persist() {
+      if (!currentProblemId) return;
+      try {
+        localStorage.setItem(getStorageKey(), JSON.stringify(progress));
+      } catch {
+        status("Browser storage failed. Download your progress JSON.");
+      }
+    }
+
+    // --- Loading System ---
+    async function loadProblemList() {
+      try {
+        const response = await fetch("problems.json");
+        const problems = await response.json();
+        const selector = $("problemSelector");
+        
+        problems.forEach(p => {
+          selector.add(new Option(p.name, p.id));
+        });
+
+        if (problems.length > 0) {
+          selector.value = problems[0].id;
+          await loadProblem(problems[0].id);
+        }
+      } catch (err) {
+        alert("Could not load problems.json. Please ensure it exists in the repository root alongside index.html.");
+      }
+    }
+
+    async function loadProblem(problemId) {
+      currentProblemId = problemId;
+      
+      // Load saved state
+      try {
+        const saved = JSON.parse(localStorage.getItem(getStorageKey()));
+        progress = saved && saved.step0 ? saved : emptyProgress();
+      } catch {
+        progress = emptyProgress();
+      }
+      
+      // Populate UI with loaded state
+      refreshStep0UI();
+      refreshStep1UI();
+      refreshStep2UI();
+
+      // Fetch assets
+      image = null;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx2.clearRect(0, 0, canvas2.width, canvas2.height);
+      status("Loading image...");
+
+      try {
+        const configRes = await fetch(`problems/${problemId}/problem_config.json`);
+        const config = configRes.ok ? await configRes.json() : {};
+        
+        image = new Image();
+        image.onload = () => {
+          canvas.width = image.naturalWidth;
+          canvas.height = image.naturalHeight;
+          
+          const req = config.quadrant_intersection || {};
+          const x = Number(req.x), y = Number(req.y);
+          
+          split = {
+            x: x > 0 && x < canvas.width ? x : canvas.width / 2,
+            y: y > 0 && y < canvas.height ? y : canvas.height / 2
+          };
+          draw();
+          drawStep2();
+          status("Problem loaded.");
+        };
+        image.onerror = () => status(`Could not load problems/${problemId}/Vehicle_Image.png`);
+        image.src = `problems/${problemId}/Vehicle_Image.png`;
+      } catch (e) {
+        status("Error loading problem assets.");
+      }
+    }
 
     $("problemSelector").addEventListener("change", (e) => loadProblem(e.target.value));
 
@@ -210,13 +336,19 @@
     $("tab-step2").addEventListener("click", () => switchTab(2));
 
     function switchTab(step) {
-      [0,1,2].forEach(i => {
-        $(`tab-step${i}`).classList.toggle("active", step === i);
-        $(`view-step${i}`).classList.toggle("active", step === i);
-      });
+      $("tab-step0").classList.toggle("active", step === 0);
+      $("tab-step1").classList.toggle("active", step === 1);
+      $("tab-step2").classList.toggle("active", step === 2);
+      
+      $("view-step0").classList.toggle("active", step === 0);
+      $("view-step1").classList.toggle("active", step === 1);
+      $("view-step2").classList.toggle("active", step === 2);
+
       if (step === 0) draw();
-      if (step === 2) { refreshStep2UI(); drawStep2(); }
-      if (step === 3) { refreshStep3UI(); drawStep3Plot(); }
+      if (step === 2) {
+        refreshStep2UI();
+        drawStep2();
+      }
     }
 
     // --- Math & Rendering Helpers ---
@@ -228,30 +360,8 @@
       }
     }
 
-    function frameName(type) { return type === "vehicle-fixed" ? progress.step0.frames.vehicle : progress.step0.frames.inertial; }
-
-    function createEqRow(parent, labelTex, inputsArr, basisVecs, color, onChange) {
-      const row = document.createElement("div");
-      row.style.display = "flex"; row.style.alignItems = "center"; row.style.marginBottom = "8px";
-      
-      const lbl = document.createElement("div");
-      lbl.style.width = "140px";
-      math(lbl, labelTex);
-      row.appendChild(lbl);
-
-      for(let i=0; i<3; i++) {
-        const inp = document.createElement("input");
-        inp.style.width = "60px"; inp.style.margin = "0 5px"; inp.style.textAlign = "center";
-        inp.value = inputsArr[i] || "";
-        inp.addEventListener("input", (e) => { inputsArr[i] = e.target.value; onChange(); });
-        row.appendChild(inp);
-        
-        const bLbl = document.createElement("div");
-        math(bLbl, `\\hat{${basisVecs[i]}} ${i<2 ? '+' : ''}`);
-        bLbl.style.color = color;
-        row.appendChild(bLbl);
-      }
-      parent.appendChild(row);
+    function frameName(type) {
+      return type === "vehicle-fixed" ? progress.step0.frames.vehicle : progress.step0.frames.inertial;
     }
 
     // ==========================================
@@ -730,12 +840,7 @@
       });
     }
 
-    function renderStep2Equations() {
-      const eqDiv = $("step2-equations");
-      const rotDiv = $("step2-rotation");
-      eqDiv.innerHTML = ""; rotDiv.innerHTML = "";
-
-      const vehRef = progress.step0.references.vehicle || "V";
+     function renderStep2Equations() {
       const ineRef = progress.step0.references.inertial || "I";
       const vf = progress.step0.frames.vehicle || "B";
       const inf = progress.step0.frames.inertial || "N";
@@ -791,8 +896,6 @@
       rRow.appendChild(rMat);
       rotDiv.appendChild(rRow);
     }
-    
-    
 
     // --- Save & Export ---
     $("saveProgress").addEventListener("click", () => { persist(); status("Progress saved in this browser."); });
