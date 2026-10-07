@@ -61,6 +61,7 @@
     <div class="tabs">
       <div class="tab active" id="tab-step0">Step 0: Frames & Points</div>
       <div class="tab" id="tab-step1">Step 1: Hypothesize</div>
+      <div class="tab" id="tab-step2">Step 2: Geometry</div>
     </div>
 
     <!-- ================= STEP 0 VIEW ================= -->
@@ -133,6 +134,49 @@
         <p class="hint">What will be a difficult part of this problem specifically?</p>
         <textarea id="step1-difficulty"></textarea>
       </section>
+    </div>
+
+     <!-- ================= STEP 2 VIEW ================= -->
+    <div id="view-step2" class="view">
+      <div class="layout">
+        <section class="panel">
+          <h2>Draw Basis Vectors</h2>
+          <p class="hint">Add a basis vector, then click its base and tip on the image.</p>
+          <canvas id="step2Canvas"></canvas>
+          <p id="step2-status" class="status"></p>
+
+          <h2>Vehicle Basis Description</h2>
+          <textarea id="vehDesc" placeholder="Describe the vehicle basis and explain why you chose it..."></textarea>
+          
+          <h2>Inertial Basis Description</h2>
+          <textarea id="ineDesc" placeholder="Describe the inertial basis and explain why you chose it..."></textarea>
+
+          <h2>Position & Velocity Vector Formulation</h2>
+          <div id="step2-equations" style="padding: 10px; background: #f9f9f9; border: 1px solid #ddd;">
+            <!-- Equations will be injected here via JS -->
+          </div>
+
+          <h2>Rotation Matrix (Inertial → Vehicle)</h2>
+          <div id="step2-rotation" style="padding: 10px; background: #f9f9f9; border: 1px solid #ddd;">
+            <!-- Rotation matrix will be injected here via JS -->
+          </div>
+        </section>
+
+        <aside class="panel">
+          <h2>Add Vector</h2>
+          <label>Name (e.g. b_1): <input id="vecName" style="width:100%"></label>
+          <label>Frame:</label>
+          <select id="vecFrame" style="width:100%; margin-bottom: 10px;">
+            <option value="vehicle-fixed">Vehicle-fixed</option>
+            <option value="inertial-fixed">Inertial-fixed</option>
+          </select>
+          <button id="addVecBtn" class="orange">Add Vector</button>
+
+          <h2>Vectors Log</h2>
+          <div id="vectorsLog"></div>
+          <p class="hint" style="margin-top: 15px;">Orange: Vehicle basis<br>Blue: Inertial basis</p>
+        </aside>
+      </div>
     </div>
 
     <!-- ================= SAVE & EXPORT (Shared) ================= -->
@@ -592,6 +636,219 @@
       } catch { status("Could not import that JSON file."); }
       event.target.value = "";
     });
+
+
+
+        // Add step2 to emptyProgress
+    function emptyProgress() {
+      return {
+        step0: { frames: { inertial: "", vehicle: "" }, points: [], assumptions: [], references: { inertial: null, vehicle: null } },
+        step1: { hypothesis: "", guidepost: "", difficulty: "" },
+        step2: { vectors: [], vehDesc: "", ineDesc: "", eqVals: {}, rotVals: [["","",""],["","",""],["","",""]] }
+      };
+    }
+
+    // Tab switching update
+    $("tab-step2").addEventListener("click", () => switchTab(2));
+
+    function switchTab(step) {
+      $("tab-step0").classList.toggle("active", step === 0);
+      $("tab-step1").classList.toggle("active", step === 1);
+      $("tab-step2").classList.toggle("active", step === 2);
+      
+      $("view-step0").classList.toggle("active", step === 0);
+      $("view-step1").classList.toggle("active", step === 1);
+      $("view-step2").classList.toggle("active", step === 2);
+
+      if (step === 2) {
+        refreshStep2UI();
+        drawStep2();
+      }
+    }
+
+    // --- STEP 2 LOGIC ---
+    const canvas2 = $("step2Canvas");
+    const ctx2 = canvas2.getContext("2d");
+    let vecPlacement = null;
+    let selectedVecIndex = null;
+
+    function refreshStep2UI() {
+      $("vehDesc").value = progress.step2.vehDesc || "";
+      $("ineDesc").value = progress.step2.ineDesc || "";
+      renderVectorsLog();
+      renderStep2Equations();
+    }
+
+    ["vehDesc", "ineDesc"].forEach(id => {
+      $(id).addEventListener("input", (e) => {
+        progress.step2[id] = e.target.value;
+        persist();
+      });
+    });
+
+    $("addVecBtn").addEventListener("click", () => {
+      const name = $("vecName").value.trim();
+      const type = $("vecFrame").value;
+      if (!name) return status("Enter a vector name.");
+      
+      const count = progress.step2.vectors.filter(v => v.type === type).length;
+      if (count >= 3) return status("Max 3 vectors per frame.");
+
+      const vec = { name, type, base: null, tip: null, view: null };
+      progress.step2.vectors.push(vec);
+      selectedVecIndex = progress.step2.vectors.length - 1;
+      $("vecName").value = "";
+      
+      vecPlacement = { vec, step: 1 };
+      $("step2-status").textContent = `Drawing ${name}: Click to place the BASE.`;
+      renderVectorsLog();
+      drawStep2();
+    });
+
+    function renderVectorsLog() {
+      const log = $("vectorsLog");
+      log.replaceChildren();
+      
+      progress.step2.vectors.forEach((vec, idx) => {
+        const row = document.createElement("div");
+        row.className = "point-row" + (selectedVecIndex === idx ? " selected" : "");
+        
+        const btn = document.createElement("button");
+        btn.className = "secondary";
+        btn.style.flex = "1";
+        btn.style.textAlign = "left";
+        math(btn, `\\hat{${vec.name}}\\quad\\tilde{${frameName(vec.type) || "?"}}`);
+        
+        btn.addEventListener("click", () => {
+          selectedVecIndex = selectedVecIndex === idx ? null : idx;
+          renderVectorsLog();
+          drawStep2();
+        });
+
+        const delBtn = document.createElement("button");
+        delBtn.textContent = "Del";
+        delBtn.addEventListener("click", () => {
+          progress.step2.vectors.splice(idx, 1);
+          if (selectedVecIndex === idx) selectedVecIndex = null;
+          vecPlacement = null;
+          $("step2-status").textContent = "";
+          renderVectorsLog();
+          renderStep2Equations();
+          drawStep2();
+          persist();
+        });
+
+        row.append(btn, delBtn);
+        log.append(row);
+      });
+    }
+
+    function renderStep2Equations() {
+      // Logic for dynamically rendering the KaTeX equations and input boxes 
+      // (similar to the Matplotlib logic, but using HTML inputs mixed with KaTeX spans)
+      const eqDiv = $("step2-equations");
+      eqDiv.innerHTML = "<p><em>Equation generation will mirror Python logic here using KaTeX...</em></p>";
+      // We will expand this specific math-builder block next!
+    }
+
+    // Step 2 Canvas Drawing & Clicking
+    canvas2.addEventListener("click", (e) => {
+      if (!vecPlacement || !image || !split) return;
+      
+      const rect = canvas2.getBoundingClientRect();
+      const x = (e.clientX - rect.left) * canvas2.width / rect.width;
+      const y = (e.clientY - rect.top) * canvas2.height / rect.height;
+      const col = x < split.x ? 0 : 1; const row = y < split.y ? 0 : 1;
+      const view = Object.keys(QUADRANTS).find(k => QUADRANTS[k][0] === col && QUADRANTS[k][1] === row);
+      const area = bounds(view);
+      
+      const xf = (x - area.left) / area.width;
+      const yf = (y - area.top) / area.height;
+
+      if (vecPlacement.step === 1) {
+        vecPlacement.vec.view = view;
+        vecPlacement.vec.base = [xf, yf];
+        vecPlacement.step = 2;
+        $("step2-status").textContent = "Base placed. Click to place the TIP in the same quadrant.";
+      } else if (vecPlacement.step === 2) {
+        if (view !== vecPlacement.vec.view) return $("step2-status").textContent = "Must be in the same quadrant!";
+        vecPlacement.vec.tip = [xf, yf];
+        vecPlacement = null;
+        $("step2-status").textContent = "Vector saved.";
+        renderVectorsLog();
+        renderStep2Equations();
+        persist();
+      }
+      drawStep2();
+    });
+
+    function drawStep2() {
+      if (!image || !split) return;
+      canvas2.width = image.naturalWidth;
+      canvas2.height = image.naturalHeight;
+      ctx2.clearRect(0, 0, canvas2.width, canvas2.height);
+      ctx2.drawImage(image, 0, 0);
+
+      // Draw Quadrant Lines
+      ctx2.strokeStyle = "#555"; ctx2.lineWidth = 2;
+      ctx2.beginPath(); ctx2.moveTo(split.x, 0); ctx2.lineTo(split.x, canvas2.height);
+      ctx2.moveTo(0, split.y); ctx2.lineTo(canvas2.width, split.y); ctx2.stroke();
+
+      // Ghost Step 0 points
+      progress.step0.points.forEach(pt => {
+        const color = pt.type === "vehicle-fixed" ? "rgba(250, 70, 22, 0.6)" : "rgba(0, 48, 135, 0.6)";
+        for (const [view, fracs] of Object.entries(pt.clicks || {})) {
+          const area = bounds(view);
+          const x = area.left + fracs[0] * area.width;
+          const y = area.top + fracs[1] * area.height;
+          ctx2.fillStyle = color;
+          ctx2.beginPath(); ctx2.arc(x, y, 5, 0, Math.PI * 2); ctx2.fill();
+        }
+      });
+
+      // Draw Vectors
+      progress.step2.vectors.forEach((vec, idx) => {
+        if (!vec.base || !vec.tip) return;
+        const color = vec.type === "vehicle-fixed" ? "#FA4616" : "#003087";
+        const area = bounds(vec.view);
+        
+        const startX = area.left + vec.base[0] * area.width;
+        const startY = area.top + vec.base[1] * area.height;
+        const endX = area.left + vec.tip[0] * area.width;
+        const endY = area.top + vec.tip[1] * area.height;
+
+        ctx2.strokeStyle = color; ctx2.fillStyle = color; ctx2.lineWidth = 3;
+        
+        if (selectedVecIndex === idx) {
+          ctx2.shadowColor = color; ctx2.shadowBlur = 10;
+        } else {
+          ctx2.shadowBlur = 0;
+        }
+
+        // Draw Line
+        ctx2.beginPath(); ctx2.moveTo(startX, startY); ctx2.lineTo(endX, endY); ctx2.stroke();
+        
+        // Draw Arrowhead
+        const angle = Math.atan2(endY - startY, endX - startX);
+        ctx2.beginPath();
+        ctx2.moveTo(endX, endY);
+        ctx2.lineTo(endX - 12 * Math.cos(angle - 0.5), endY - 12 * Math.sin(angle - 0.5));
+        ctx2.lineTo(endX - 12 * Math.cos(angle + 0.5), endY - 12 * Math.sin(angle + 0.5));
+        ctx2.fill();
+        ctx2.shadowBlur = 0; // reset
+      });
+    }
+
+    // Override original loadProblem to trigger Step 2 draw
+    const originalLoadProblem = loadProblem;
+    loadProblem = async function(pid) {
+      await originalLoadProblem(pid);
+      drawStep2();
+    }
+
+
+
+
 
     // Start
     loadProblemList();
