@@ -5,1075 +5,4597 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Dynamics Helper</title>
 
-  <!-- Math rendering -->
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
-  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+  <!-- KaTeX for math rendering -->
+  <link rel="stylesheet"
+    href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+  <script defer
+    src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js">
+  </script>
 
-  <!-- Plotly for 3D Graphing -->
+  <!-- Nerdamer for symbolic algebra (Steps 2 rotation check) -->
+  <script src="https://cdn.jsdelivr.net/npm/nerdamer@1.1.13/nerdamer.core.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/nerdamer@1.1.13/Algebra.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/nerdamer@1.1.13/Calculus.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/nerdamer@1.1.13/Solve.js"></script>
+
+  <!-- Plotly for 3D plots (Steps 3 and 5) -->
   <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
 
-  
   <style>
-    :root { font-family: Arial, sans-serif; color: #222; background: #f3f4f6; }
+    /* ── Reset & base ───────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; }
+    :root { font-family: Arial, sans-serif; font-size: 15px; color: #222; background: #f3f4f6; }
     body { margin: 0; }
-    header { background: #003087; color: white; padding: 14px 20px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;}
-    header h1 { margin: 0; font-size: 1.3rem; }
-    main { max-width: 1500px; margin: auto; padding: 18px; }
-    
-    .panel { background: white; border: 1px solid #d8dce2; border-radius: 8px; padding: 14px; margin-bottom: 14px; }
-    .layout { display: grid; grid-template-columns: minmax(0, 1fr) 290px; gap: 14px; align-items: start; }
-    
-    canvas { display: block; width: 100%; height: auto; cursor: crosshair; background: #ddd; }
-    input, select, textarea, button { font: inherit; }
-    input, select, textarea { box-sizing: border-box; padding: 7px; margin: 4px 5px 8px 0; max-width: 100%; }
-    textarea { width: 100%; min-height: 80px; resize: vertical; }
-    
-    button { padding: 8px 11px; margin: 3px; border: 0; border-radius: 5px; background: #003087; color: white; cursor: pointer; }
-    button:hover { filter: brightness(1.18); }
-    button.secondary { background: #555; }
-    button.orange { background: #c84716; }
-    
-    .point-row { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #ddd; padding: 7px 2px; gap: 5px; }
-    .point-row.selected { background: #dce8f7; }
-    .point-row button { margin: 0; }
-    .assumption { border: 1px solid #ddd; padding: 10px; margin: 10px 0; overflow-wrap: anywhere; }
-    .assumption p { margin: 5px 0; }
-    .status { min-height: 1.4em; font-weight: bold; color: #003087; }
-    .hint { color: #555; font-size: 0.92rem; }
-    
-    /* Tabs */
-    .tabs { display: flex; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
-    .tab { padding: 10px 20px; background: #ddd; cursor: pointer; border-radius: 5px; font-weight: bold; }
+
+    /* ── Header ─────────────────────────────────── */
+    header {
+      background: #003087; color: white;
+      padding: 12px 20px;
+      display: flex; justify-content: space-between;
+      align-items: center; flex-wrap: wrap; gap: 10px;
+    }
+    header h1 { margin: 0; font-size: 1.25rem; }
+
+    /* ── Pyodide loading overlay ─────────────────── */
+    #pyodide-overlay {
+      display: none;
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.55);
+      z-index: 9999;
+      align-items: center; justify-content: center;
+      flex-direction: column; gap: 18px;
+    }
+    #pyodide-overlay.visible { display: flex; }
+    #pyodide-overlay p {
+      color: white; font-size: 1.1rem;
+      text-align: center; max-width: 340px;
+    }
+    .spinner {
+      width: 52px; height: 52px;
+      border: 6px solid #ffffff44;
+      border-top-color: #FA4616;
+      border-radius: 50%;
+      animation: spin 0.9s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Main layout ─────────────────────────────── */
+    main { max-width: 1500px; margin: auto; padding: 16px; }
+
+    /* ── Panels ──────────────────────────────────── */
+    .panel {
+      background: white;
+      border: 1px solid #d8dce2;
+      border-radius: 8px;
+      padding: 14px;
+      margin-bottom: 14px;
+    }
+    .panel h2 { margin-top: 8px; font-size: 1.05rem; color: #003087; }
+    .panel h3 { margin-top: 8px; font-size: 0.97rem; color: #555; }
+
+    /* ── Two-column layout ───────────────────────── */
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 310px;
+      gap: 14px; align-items: start;
+    }
+    @media (max-width: 860px) { .layout { grid-template-columns: 1fr; } }
+
+    /* ── Tabs ────────────────────────────────────── */
+    .tabs {
+      display: flex; flex-wrap: wrap;
+      gap: 8px; margin-bottom: 14px;
+    }
+    .tab {
+      padding: 9px 18px;
+      background: #ddd; border-radius: 5px;
+      cursor: pointer; font-weight: bold;
+      user-select: none;
+    }
     .tab.active { background: #FA4616; color: white; }
     .view { display: none; }
     .view.active { display: block; }
 
-    @media (max-width: 850px) { .layout { grid-template-columns: 1fr; } }
+    /* ── Form elements ───────────────────────────── */
+    input, select, textarea, button { font: inherit; }
+    input[type=text], input:not([type]),
+    select, textarea {
+      padding: 6px 8px;
+      border: 1px solid #bbb; border-radius: 4px;
+      margin: 3px 4px 6px 0;
+    }
+    textarea { width: 100%; min-height: 72px; resize: vertical; }
+    input.short { width: 64px; text-align: center; }
+    input.medium { width: 110px; }
+
+    /* ── Buttons ─────────────────────────────────── */
+    button {
+      padding: 7px 12px; margin: 3px;
+      border: none; border-radius: 5px;
+      background: #003087; color: white;
+      cursor: pointer;
+    }
+    button:hover:not(:disabled) { filter: brightness(1.18); }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    button.orange { background: #c84716; }
+    button.green  { background: #2e7d32; }
+    button.grey   { background: #555; }
+    button.red    { background: #b71c1c; }
+    button.small  { padding: 4px 8px; font-size: 0.85rem; margin: 2px; }
+
+    /* ── Point / vector rows ─────────────────────── */
+    .item-row {
+      display: flex; align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid #eee;
+      padding: 6px 2px; gap: 6px;
+    }
+    .item-row.selected { background: #dce8f7; border-radius: 4px; }
+    .item-row .label-btn {
+      flex: 1; text-align: left;
+      background: #f5f5f5; color: #222;
+    }
+
+    /* ── Assumption / load cards ─────────────────── */
+    .card {
+      border: 1px solid #ddd; border-radius: 6px;
+      padding: 10px; margin: 8px 0;
+      overflow-wrap: anywhere;
+    }
+    .card-header {
+      background: #e8e8e8; margin: -10px -10px 8px -10px;
+      padding: 6px 10px; border-radius: 6px 6px 0 0;
+      display: flex; justify-content: space-between;
+      align-items: center;
+    }
+    .card p { margin: 4px 0; }
+
+    /* ── Equation rows ───────────────────────────── */
+    .eq-row {
+      display: flex; align-items: center;
+      flex-wrap: wrap; gap: 4px;
+      margin-bottom: 10px;
+    }
+    .eq-lhs { min-width: 160px; }
+    .eq-basis { color: #003087; font-weight: bold; }
+    .eq-basis.vehicle { color: #FA4616; }
+
+    /* ── Section divider ─────────────────────────── */
+    .section-divider {
+      border: none; border-top: 2px solid #ddd;
+      margin: 16px 0 10px;
+    }
+
+    /* ── Canvas ──────────────────────────────────── */
+    canvas {
+      display: block; width: 100%; height: auto;
+      cursor: crosshair; background: #e0e0e0;
+    }
+
+    /* ── Status bar ──────────────────────────────── */
+    .status-bar {
+      min-height: 1.5em;
+      font-weight: bold; color: #003087;
+      padding: 4px 0;
+    }
+
+    .hint { color: #666; font-size: 0.88rem; }
+
+    /* ── Save bar ────────────────────────────────── */
+    .save-bar {
+      background: white;
+      border: 1px solid #d8dce2;
+      border-radius: 8px;
+      padding: 12px 14px;
+      margin-top: 4px;
+      display: flex; flex-wrap: wrap;
+      gap: 10px; align-items: center;
+    }
   </style>
 </head>
-
 <body>
-  <header>
-    <h1>Dynamics Helper</h1>
-    <div>
-      <label for="problemSelector" style="font-weight: bold; margin-right: 8px;">Select Problem:</label>
-      <select id="problemSelector" style="color: black; padding: 4px;"></select>
-    </div>
-  </header>
 
-  <main>
-    <div class="tabs">
-      <div class="tab active" id="tab-step0">Step 0: Frames & Points</div>
-      <div class="tab" id="tab-step1">Step 1: Hypothesize</div>
-      <div class="tab" id="tab-step2">Step 2: Basis Vectors</div>
-      <div class="tab" id="tab-step3">Step 3: Mass & Inertia</div>
-    </div>
+<!-- Pyodide loading overlay -->
+<div id="pyodide-overlay">
+  <div class="spinner"></div>
+  <p>Loading symbolic math engine…<br>
+     This may take up to 30 seconds on your first visit.</p>
+</div>
 
-    <!-- ================= STEP 0 VIEW ================= -->
-    <div id="view-step0" class="view active">
+<header>
+  <h1>Dynamics Helper</h1>
+  <div>
+    <label for="problemSelector" style="font-weight:bold; margin-right:8px;">
+      Problem:
+    </label>
+    <select id="problemSelector" style="color:black; padding:4px;"></select>
+  </div>
+</header>
+
+<main>
+
+  <!-- ── Tab bar ── -->
+  <div class="tabs">
+    <div class="tab active"  id="tab-step0">Step 0</div>
+    <div class="tab"         id="tab-step1">Step 1</div>
+    <div class="tab"         id="tab-step2">Step 2</div>
+    <div class="tab"         id="tab-step3">Step 3</div>
+    <div class="tab"         id="tab-step4">Step 4</div>
+    <div class="tab"         id="tab-step5">Step 5</div>
+    <div class="tab"         id="tab-step6">Step 6</div>
+  </div>
+
+  <!-- ════════════════════════════════════════
+       STEP 0 — Frames, Points, Assumptions
+       ════════════════════════════════════════ -->
+  <div id="view-step0" class="view active">
+
+    <section class="panel">
+      <h2>Reference Frames</h2>
+      <label>Inertial frame letter:
+        <input id="inertialFrame" type="text" class="short" placeholder="N">
+      </label>
+      <label>Vehicle frame letter:
+        <input id="vehicleFrame" type="text" class="short" placeholder="B">
+      </label>
+      <button id="saveFramesBtn">Set Frames</button>
+      <div id="framePreview" style="margin-top:8px;"></div>
+    </section>
+
+    <div class="layout">
       <section class="panel">
-        <h2>Reference frames</h2>
-        <label>Inertial frame: <input id="inertialFrame" maxlength="20" placeholder="e.g. N"></label>
-        <label>Vehicle frame: <input id="vehicleFrame" maxlength="20" placeholder="e.g. B"></label>
-        <button id="saveFrames">Set frame names</button>
-        <div id="framePreview"></div>
+        <h2>Vehicle Image</h2>
+        <p class="hint">
+          Vehicle-fixed points: click in Side → Front → Top → 3D order.
+        </p>
+        <canvas id="canvas0"></canvas>
+        <p id="status0" class="status-bar"></p>
       </section>
 
-      <div class="layout">
-        <section class="panel">
-          <h2>Vehicle image</h2>
-          <p class="hint">To place a vehicle-fixed point, click its location in the Side, Front, Top, and 3D views.</p>
-          <canvas id="vehicleCanvas"></canvas>
-          <p id="status" class="status"></p>
-        </section>
-
-        <aside class="panel">
-          <h2>Add point</h2>
-          <label for="pointLabel">Point label</label><br>
-          <input id="pointLabel" placeholder="e.g. A or A_1"><br>
-          <label for="pointType">Fixed to</label><br>
+      <aside class="panel">
+        <h2>Add Point</h2>
+        <label>Label: <input id="pointLabel" type="text" class="short" placeholder="A"></label><br>
+        <label>Fixed to:
           <select id="pointType">
             <option value="vehicle-fixed">Vehicle frame</option>
             <option value="inertial-fixed">Inertial frame</option>
-          </select><br>
-          <button id="addPoint" class="orange">Add point</button>
-          <button id="cancelPlacement" class="secondary" hidden>Cancel placement</button>
+          </select>
+        </label><br>
+        <button id="addPointBtn" class="orange">Add Point</button>
+        <button id="cancelPlaceBtn" class="grey" hidden>Cancel</button>
 
-          <h2>Points log</h2>
-          <div id="pointsLog"></div>
+        <hr class="section-divider">
+        <h2>Points Log</h2>
+        <div id="pointsLog"></div>
 
-          <h2>Reference points</h2>
-          <label for="vehicleReference">Vehicle reference</label><br>
-          <select id="vehicleReference"></select><br>
-          <label for="inertialReference">Inertial reference</label><br>
-          <select id="inertialReference"></select>
-        </aside>
-      </div>
-
-      <section class="panel">
-        <h2>Assumptions</h2>
-        <label>1. What is your assumption?</label>
-        <textarea id="assumption"></textarea>
-        <label>2. Why are you making it?</label>
-        <textarea id="why"></textarea>
-        <label>3. Why is it reasonable?</label>
-        <textarea id="reasonable"></textarea>
-        <button id="saveAssumption">Add assumption</button>
-        <button id="cancelEdit" class="secondary" hidden>Cancel edit</button>
-        <div id="assumptionsLog"></div>
-      </section>
+        <hr class="section-divider">
+        <h2>Reference Points</h2>
+        <label>Vehicle ref:
+          <select id="vehicleRef"></select>
+        </label><br>
+        <label>Inertial ref:
+          <select id="inertialRef"></select>
+        </label>
+      </aside>
     </div>
 
-    <!-- ================= STEP 1 VIEW ================= -->
-    <div id="view-step1" class="view">
+    <section class="panel">
+      <h2>Assumptions</h2>
+      <label>1. Assumption:<textarea id="assumpText"></textarea></label>
+      <label>2. Why:<textarea id="assumpWhy"></textarea></label>
+      <label>3. Reasonable because:<textarea id="assumpReason"></textarea></label>
+      <button id="saveAssumpBtn" class="green">Add Assumption</button>
+      <button id="cancelAssumpBtn" class="grey" hidden>Cancel Edit</button>
+      <div id="assumptionsLog"></div>
+    </section>
+
+  </div><!-- /view-step0 -->
+
+
+  <!-- ════════════════════════════════════════
+       STEP 1 — Hypothesize & Sketch
+       ════════════════════════════════════════ -->
+  <div id="view-step1" class="view">
+    <section class="panel">
+      <h2>1. Hypothesis</h2>
+      <p class="hint">What do you think the motion will be?</p>
+      <textarea id="s1-hypothesis"></textarea>
+
+      <h2>2. Guidepost</h2>
+      <p class="hint">
+        What example system can you draw on for insight,
+        and how does it help specifically?
+      </p>
+      <textarea id="s1-guidepost"></textarea>
+
+      <h2>3. Difficulty</h2>
+      <p class="hint">What will be the hardest part of this problem?</p>
+      <textarea id="s1-difficulty"></textarea>
+    </section>
+  </div><!-- /view-step1 -->
+
+
+  <!-- ════════════════════════════════════════
+       STEP 2 — Basis Vectors & Rotation
+       ════════════════════════════════════════ -->
+  <div id="view-step2" class="view">
+    <div class="layout">
+
       <section class="panel">
-        <h2>1. Hypothesis</h2>
-        <p class="hint">What do you think the motion will be?</p>
-        <textarea id="step1-hypothesis"></textarea>
+        <h2>Draw Basis Vectors</h2>
+        <p class="hint">
+          Add a vector in the sidebar, then click its base and tip.
+        </p>
+        <canvas id="canvas2"></canvas>
+        <p id="status2" class="status-bar"></p>
 
-        <h2>2. Guidepost</h2>
-        <p class="hint">What is an example system you can draw on for insight, and how can it help you specifically?</p>
-        <textarea id="step1-guidepost"></textarea>
+        <hr class="section-divider">
+        <h3>Vehicle Basis — Description</h3>
+        <textarea id="s2-vehDesc"
+          placeholder="Describe the vehicle basis and why you chose it…">
+        </textarea>
 
-        <h2>3. Difficulty</h2>
-        <p class="hint">What will be a difficult part of this problem specifically?</p>
-        <textarea id="step1-difficulty"></textarea>
+        <h3>Inertial Basis — Description</h3>
+        <textarea id="s2-ineDesc"
+          placeholder="Describe the inertial basis and why you chose it…">
+        </textarea>
+
+        <hr class="section-divider">
+        <h2>Position &amp; Velocity Formulation</h2>
+        <div id="s2-equations"></div>
+
+        <hr class="section-divider">
+        <h2>Rotation Angle</h2>
+        <p class="hint">
+          Enter the single angle variable that appears in your
+          orientation vector above (e.g. <em>q1</em>).
+          The axis is determined by whichever
+          θ-component is nonzero.
+        </p>
+        <div id="s2-angleRow" class="eq-row"></div>
+
+        <hr class="section-divider">
+        <h2>Rotation Matrix Check</h2>
+        <div id="s2-rotEntries"></div>
+        <button id="checkRotBtn" class="green" hidden>
+          Check Rotation
+        </button>
+        <p id="s2-rotStatus" class="status-bar"></p>
       </section>
-    </div>
 
-    <!-- ================= STEP 2 VIEW ================= -->
-    <div id="view-step2" class="view">
-      <div class="layout">
-        <section class="panel">
-          <h2>Draw Basis Vectors</h2>
-          <p class="hint">Add a basis vector, then click its base and tip on the image.</p>
-          <canvas id="step2Canvas"></canvas>
-          <p id="step2-status" class="status"></p>
-
-          <h2>Vehicle Basis Description</h2>
-          <textarea id="vehDesc" placeholder="Describe the vehicle basis and explain why you chose it..."></textarea>
-          
-          <h2>Inertial Basis Description</h2>
-          <textarea id="ineDesc" placeholder="Describe the inertial basis and explain why you chose it..."></textarea>
-
-          <h2>Position & Velocity Vector Formulation</h2>
-          <div id="step2-equations" style="padding: 10px; background: #f9f9f9; border: 1px solid #ddd;">
-            <p><em>Equation generation will mirror Python logic here using KaTeX...</em></p>
-          </div>
-
-          <h2>Rotation Matrix (Inertial → Vehicle)</h2>
-          <div id="step2-rotation" style="padding: 10px; background: #f9f9f9; border: 1px solid #ddd;">
-            <p><em>Rotation matrix will be injected here via JS...</em></p>
-          </div>
-        </section>
-
-        <aside class="panel">
-          <h2>Add Vector</h2>
-          <label>Name (e.g. b_1): <input id="vecName" style="width:100%"></label>
-          <label>Frame:</label>
-          <select id="vecFrame" style="width:100%; margin-bottom: 10px;">
+      <aside class="panel">
+        <h2>Add Vector</h2>
+        <label>Name (e.g. b_1):
+          <input id="vecName" type="text" class="medium">
+        </label><br>
+        <label>Frame:
+          <select id="vecFrame">
             <option value="vehicle-fixed">Vehicle-fixed</option>
             <option value="inertial-fixed">Inertial-fixed</option>
           </select>
-          <button id="addVecBtn" class="orange">Add Vector</button>
+        </label><br>
+        <button id="addVecBtn" class="orange">Add Vector</button>
 
-          <h2>Vectors Log</h2>
-          <div id="vectorsLog"></div>
-          <p class="hint" style="margin-top: 15px;">Orange: Vehicle basis<br>Blue: Inertial basis</p>
-        </aside>
-      </div>
+        <hr class="section-divider">
+        <h2>Vectors Log</h2>
+        <div id="vectorsLog"></div>
+        <p class="hint" style="margin-top:10px;">
+          <span style="color:#FA4616">■</span> Vehicle &nbsp;
+          <span style="color:#003087">■</span> Inertial
+        </p>
+      </aside>
+
     </div>
+  </div><!-- /view-step2 -->
 
-    <!-- ================= STEP 3 VIEW ================= -->
-    <div id="view-step3" class="view">
-      <div class="layout">
-        <section class="panel">
-          <h2>Vehicle 3D Geometry</h2>
-          <button id="refreshPlotBtn" class="secondary">🔄 Refresh 3D Plot</button>
-          <div id="step3Plot" style="width:100%; height:450px; background: #eaeaea; margin-top: 10px;"></div>
-          <p class="hint">Orange = Vehicle points. Black ⊕ = Center of Mass.</p>
-        </section>
 
-        <aside class="panel" style="max-height: 700px; overflow-y: auto;">
-          <h2>0th Moment (Mass)</h2>
-          <div id="step3-masses"></div>
-          
-          <h2>1st Moment (Center of Mass)</h2>
-          <div id="step3-com"></div>
+  <!-- ════════════════════════════════════════
+       STEP 3 — Mass & Inertia
+       ════════════════════════════════════════ -->
+  <div id="view-step3" class="view">
 
-          <h2>2nd Moment (Inertia Tensors)</h2>
-          <div id="step3-inertia"></div>
-        </aside>
-      </div>
-    </div>
-
-    <!-- ================= SAVE & EXPORT (Shared) ================= -->
     <section class="panel">
-      <button id="saveProgress">Save in this browser</button>
-      <button id="exportProgress">Download progress JSON</button>
-      <label>
-        Import progress JSON:
-        <input id="importProgress" type="file" accept=".json,application/json">
-      </label>
+      <h2>Vehicle Geometry — 3D Plot</h2>
+      <button id="refreshPlot3Btn" class="grey">🔄 Refresh Plot</button>
+      <div id="plot3" style="width:100%;height:460px;"></div>
       <p class="hint">
-        This prototype saves only in this browser. Clearing browser storage or using another device will not carry progress over unless you export and import the JSON file.
+        Orange = vehicle points. Blue = origin (*).
+        Black ⊕ = centre of mass (appears after 1st Moment is saved).
       </p>
     </section>
-  </main>
 
-  <script>
-    "use strict";
-// --- State & Constants ---
-    const VIEW_ORDER = ["side", "front", "top", "3d"];
-    const QUADRANTS = { side: [0, 0], front: [1, 0], top: [0, 1], "3d": [1, 1] };
-    const LABELS = { side: "Side", front: "Front", top: "Top", "3d": "3D" };
-    const $ = (id) => document.getElementById(id);
+    <section class="panel">
+      <h2>0th Moment of Inertia
+        <button id="check0thBtn" class="green small"
+          style="margin-left:12px;">Check</button>
+      </h2>
+      <div id="s3-masses"></div>
+    </section>
 
-    let currentProblemId = null;
-    let progress = emptyProgress();
-    let selectedLabel = null;
-    let placement = null;
-    let editAssumptionIndex = null;
-    let image = null;
-    let split = null;
+    <section class="panel">
+      <h2>1st Moment of Inertia
+        <button id="check1stBtn" class="green small"
+          style="margin-left:12px;">Check</button>
+      </h2>
+      <div id="s3-com"></div>
+    </section>
 
-    const canvas = $("vehicleCanvas");
-    const ctx = canvas.getContext("2d");
-    
-    const canvas2 = $("step2Canvas");
-    const ctx2 = canvas2.getContext("2d");
-    let vecPlacement = null;
-    let selectedVecIndex = null;
+    <section class="panel">
+      <h2>2nd Moment of Inertia
+        <button id="check2ndBtn" class="green small"
+          style="margin-left:12px;">Check</button>
+      </h2>
+      <div id="s3-inertia"></div>
+    </section>
 
-    function emptyProgress() {
-      return {
-        step0: { frames: { inertial: "N", vehicle: "B" }, points: [], assumptions: [], references: { inertial: null, vehicle: null } },
-        step1: { hypothesis: "", guidepost: "", difficulty: "" },
-        step2: { 
-          vectors: [], vehDesc: "", ineDesc: "", 
-          eqVals: { r: ["","",""], theta: ["","",""], v: ["","",""], omega: ["","",""] }, 
-          geomVals: {}, 
-          rotVals: [["","",""],["","",""],["","",""]] 
-        },
-        step3: {
-          masses: {}, totalMass: "", r_com: ["","",""], r_p_com: {}, j_p: {}, j_total: [["","",""],["","",""],["","",""]]
-        }
-      };
+  </div><!-- /view-step3 -->
+
+
+  <!-- ════════════════════════════════════════
+       STEP 4 — Momentum
+       ════════════════════════════════════════ -->
+  <div id="view-step4" class="view">
+    <section class="panel">
+      <h2>Linear Momentum
+        <button id="checkLinBtn" class="green small"
+          style="margin-left:12px;">Check</button>
+      </h2>
+      <p class="hint">
+        Use the Step 3 total mass and the Step 2
+        inertial-basis velocity.
+      </p>
+      <div id="s4-linear"></div>
+    </section>
+
+    <section class="panel">
+      <h2>Angular Momentum
+        <button id="checkAngBtn" class="green small"
+          style="margin-left:12px;">Check</button>
+      </h2>
+      <p class="hint">
+        Use the Step 3 inertia about C and the Step 2
+        angular velocity. Convert with the Step 2 rotation.
+      </p>
+      <div id="s4-angular"></div>
+    </section>
+  </div><!-- /view-step4 -->
+
+
+  <!-- ════════════════════════════════════════
+       STEP 5 — Free Body Diagram
+       ════════════════════════════════════════ -->
+  <div id="view-step5" class="view">
+
+    <section class="panel">
+      <h2>Vehicle FBD — 3D Plot</h2>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
+        <button id="addForceBtn" class="orange">+ Add Force</button>
+        <button id="addTorqueBtn">+ Add Torque</button>
+        <button id="refreshPlot5Btn" class="grey">🔄 Refresh Plot</button>
+      </div>
+      <div id="plot5" style="width:100%;height:460px;"></div>
+
+      <hr class="section-divider">
+      <h3>Rotation Angle (for plotting inertial-basis arrows)</h3>
+      <p class="hint">Enter a numeric value to preview inertial forces.</p>
+      <label>Angle value:
+        <input id="s5-angleVal" type="text" class="short" value="0">
+      </label>
+    </section>
+
+    <section class="panel">
+      <h2>Forces &amp; Torques</h2>
+      <div id="s5-loads"></div>
+    </section>
+
+    <section class="panel">
+      <h2>Totals
+        <button id="checkTotalsBtn" class="green small"
+          style="margin-left:12px;">Check</button>
+      </h2>
+      <label>Express totals in:
+        <select id="s5-totBasis">
+          <option value="vehicle">Vehicle basis</option>
+          <option value="inertial">Inertial basis</option>
+        </select>
+      </label>
+      <div id="s5-totals"></div>
+    </section>
+
+  </div><!-- /view-step5 -->
+
+
+  <!-- ════════════════════════════════════════
+       STEP 6 — Equations of Motion
+       ════════════════════════════════════════ -->
+  <div id="view-step6" class="view">
+    <section class="panel">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <h2 style="margin:0;">Equations of Motion</h2>
+        <button id="checkAllEOMBtn" class="green">Check All</button>
+      </div>
+      <p class="hint">
+        One row per active state variable from Step 2.
+        Components entered as 0 are omitted.
+      </p>
+      <div id="s6-eom"></div>
+    </section>
+  </div><!-- /view-step6 -->
+
+
+  <!-- ════════════════════════════════════════
+       Shared save / export bar
+       ════════════════════════════════════════ -->
+  <div class="save-bar">
+    <button id="saveBtn">💾 Save in Browser</button>
+    <button id="exportBtn" class="grey">⬇ Download JSON</button>
+    <label style="cursor:pointer;">
+      ⬆ Import JSON
+      <input id="importInput" type="file"
+             accept=".json,application/json"
+             style="display:none;">
+    </label>
+    <span id="saveStatus" class="hint"></span>
+  </div>
+
+</main>
+<!-- ═══════════════════════════════════════════════════════════
+     END OF CHUNK 1  —  paste Chunk 2 directly below this line
+     ═══════════════════════════════════════════════════════════ -->
+     <script>
+"use strict";
+
+// ═══════════════════════════════════════════════════════════
+//  CHUNK 2 — Shared state, loading, persistence, tab logic
+// ═══════════════════════════════════════════════════════════
+
+const $ = (id) => document.getElementById(id);
+
+// ── Constants ────────────────────────────────────────────
+const VIEW_ORDER = ["side", "front", "top", "3d"];
+const QUADRANTS  = { side:[0,0], front:[1,0], top:[0,1], "3d":[1,1] };
+const QLABELS    = { side:"Side", front:"Front", top:"Top", "3d":"3D" };
+
+const ORANGE = "#FA4616";
+const BLUE   = "#003087";
+const STEP_COUNT = 7;
+
+// ── Global mutable state ─────────────────────────────────
+let currentProblemId = null;
+let problemConfig    = {};
+let image            = null;   // shared HTMLImageElement
+let split            = null;   // { x, y } quadrant split in image pixels
+
+let progress = emptyProgress();
+
+// Step 2 drawing state
+let vecPlacement     = null;   // { vec, step:1|2 }
+let selectedVecIdx   = null;
+
+// Step 0 drawing state
+let ptPlacement      = null;   // { point, nextIdx }
+let selectedPtLabel  = null;
+
+// Step 5 state
+let editLoadIdx      = null;
+
+// Assumption editing state
+let editAssumpIdx    = null;
+
+// Pyodide instance (loaded lazily on first Step 4/6 check)
+let pyodideReady     = false;
+let pyodideLoading   = false;
+let pyodide          = null;
+
+// ── Empty progress template ───────────────────────────────
+function emptyProgress() {
+  return {
+    step0: {
+      frames:      { inertial: "", vehicle: "" },
+      points:      [],
+      assumptions: [],
+      references:  { inertial: null, vehicle: null }
+    },
+    step1: {
+      hypothesis: "",
+      guidepost:  "",
+      difficulty: ""
+    },
+    step2: {
+      vectors:  [],
+      vehDesc:  "",
+      ineDesc:  "",
+      eqVals:   { r:["","",""], theta:["","",""], v:["","",""], omega:["","",""] },
+      geomVals: {},
+      rotVals:  [["","",""],["","",""],["","",""]],
+      angleVar: ""
+    },
+    step3: {
+      masses:    {},
+      totalMass: "",
+      r_com:     ["","",""],
+      r_p_com:   {},
+      j_p:       {},
+      j_total:   [["","",""],["","",""],["","",""]]
+    },
+    step4: {
+      linear:  ["","",""],
+      angular: ["","",""]
+    },
+    step5: {
+      loads:      [],
+      totBasis:   "vehicle",
+      totF:       ["","",""],
+      totM:       ["","",""],
+      angleVal:   "0"
+    },
+    step6: {
+      answers: {}   // keyed "group:index" → string
     }
+  };
+}
 
-    function status(message) { $("status").textContent = message; }
-    function getStorageKey() { return `dynamics-v1-${currentProblemId}`; }
+// ── Storage key ───────────────────────────────────────────
+function storageKey() {
+  return `dynamics-v2-${currentProblemId}`;
+}
 
-    function persist() {
-      if (!currentProblemId) return;
-      try { localStorage.setItem(getStorageKey(), JSON.stringify(progress)); } 
-      catch { status("Browser storage failed."); }
+// ── Persist to localStorage ───────────────────────────────
+function persist() {
+  if (!currentProblemId) return;
+  try {
+    localStorage.setItem(storageKey(), JSON.stringify(progress));
+  } catch {
+    setSaveStatus("Browser storage full — download your JSON.");
+  }
+}
+
+function setSaveStatus(msg) {
+  const el = $("saveStatus");
+  if (el) el.textContent = msg;
+}
+
+// ── Check enabled flag from problem config ────────────────
+function checksEnabled() {
+  if (!problemConfig || typeof problemConfig !== "object") return true;
+  const flag = problemConfig.checks_enabled;
+  if (typeof flag === "boolean") return flag;
+  return true;
+}
+
+function applyChecksEnabled() {
+  const enabled = checksEnabled();
+  const checkIds = [
+    "checkRotBtn","check0thBtn","check1stBtn","check2ndBtn",
+    "checkLinBtn","checkAngBtn","checkTotalsBtn","checkAllEOMBtn"
+  ];
+  checkIds.forEach(id => {
+    const btn = $(id);
+    if (btn) btn.disabled = !enabled;
+  });
+  // Per-row EOM check buttons
+  document.querySelectorAll(".eom-check-btn").forEach(btn => {
+    btn.disabled = !enabled;
+  });
+}
+
+// ── Load problem list from problems.json ──────────────────
+async function loadProblemList() {
+  try {
+    const res = await fetch("problems.json");
+    if (!res.ok) throw new Error("problems.json not found");
+    const problems = await res.json();
+
+    const sel = $("problemSelector");
+    problems.forEach(p => sel.add(new Option(p.name, p.id)));
+
+    if (problems.length > 0) {
+      sel.value = problems[0].id;
+      await loadProblem(problems[0].id);
     }
+  } catch (err) {
+    alert(
+      "Could not load problems.json.\n" +
+      "Ensure it exists in the repository root.\n\n" +
+      err.message
+    );
+  }
+}
 
-    // --- Loading System ---
-    async function loadProblemList() {
-      try {
-        const response = await fetch("problems.json");
-        const problems = await response.json();
-        const selector = $("problemSelector");
-        problems.forEach(p => selector.add(new Option(p.name, p.id)));
-        if (problems.length > 0) {
-          selector.value = problems[0].id;
-          await loadProblem(problems[0].id);
-        }
-      } catch (err) { alert("Ensure problems.json exists in root."); }
+// ── Load one problem ──────────────────────────────────────
+async function loadProblem(problemId) {
+  currentProblemId = problemId;
+
+  // Restore saved progress or start fresh
+  try {
+    const raw = localStorage.getItem(storageKey());
+    const saved = raw ? JSON.parse(raw) : null;
+    if (saved && saved.step0) {
+      progress = deepMerge(emptyProgress(), saved);
+    } else {
+      progress = emptyProgress();
     }
+  } catch {
+    progress = emptyProgress();
+  }
 
-    async function loadProblem(problemId) {
-      currentProblemId = problemId;
-      try {
-        const saved = JSON.parse(localStorage.getItem(getStorageKey()));
-        progress = saved && saved.step0 ? saved : emptyProgress();
-        
-        // Data migration checks for older saves
-        if(!progress.step2.geomVals) progress.step2.geomVals = {};
-        if(!progress.step3) progress.step3 = emptyProgress().step3;
-      } catch { progress = emptyProgress(); }
-      
-      refreshStep0UI(); refreshStep1UI(); refreshStep2UI(); refreshStep3UI();
+  // Fetch config (public display settings only — no answer keys)
+  try {
+    const cfgRes = await fetch(
+      `problems/${problemId}/problem_config.json`
+    );
+    problemConfig = cfgRes.ok ? await cfgRes.json() : {};
+  } catch {
+    problemConfig = {};
+  }
 
-      image = null;
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx2.clearRect(0, 0, canvas2.width, canvas2.height);
-      status("Loading image...");
+  applyChecksEnabled();
 
-      try {
-        const configRes = await fetch(`problems/${problemId}/problem_config.json`);
-        const config = configRes.ok ? await configRes.json() : {};
-        
-        image = new Image();
-        image.onload = () => {
-          canvas.width = canvas2.width = image.naturalWidth;
-          canvas.height = canvas2.height = image.naturalHeight;
-          const req = config.quadrant_intersection || {};
-          const x = Number(req.x), y = Number(req.y);
-          split = {
-            x: x > 0 && x < canvas.width ? x : canvas.width / 2,
-            y: y > 0 && y < canvas.height ? y : canvas.height / 2
-          };
-          draw(); drawStep2();
-          status("Problem loaded.");
-        };
-        image.src = `problems/${problemId}/Vehicle_Image.png`;
-      } catch (e) { status("Error loading problem assets."); }
+  // Load image
+  image = null;
+  split = null;
+
+  const img = new Image();
+  img.onload = () => {
+    image = img;
+
+    const req = problemConfig.quadrant_intersection || {};
+    const ix  = Number(req.x);
+    const iy  = Number(req.y);
+
+    split = {
+      x: ix > 0 && ix < img.naturalWidth  ? ix : img.naturalWidth  / 2,
+      y: iy > 0 && iy < img.naturalHeight ? iy : img.naturalHeight / 2
+    };
+
+    // Refresh whichever step is currently visible
+    const activeStep = getActiveStep();
+    refreshStep(activeStep);
+    setStatus0("Problem loaded.");
+  };
+
+  img.onerror = () => {
+    setStatus0(
+      `Could not load problems/${problemId}/Vehicle_Image.png`
+    );
+  };
+
+  img.src = `problems/${problemId}/Vehicle_Image.png`;
+}
+
+$("problemSelector").addEventListener("change", e => {
+  loadProblem(e.target.value);
+});
+
+// ── Deep merge helper (keeps saved data, fills missing keys) ──
+function deepMerge(target, source) {
+  if (
+    typeof target !== "object" || target === null ||
+    typeof source !== "object" || source === null
+  ) {
+    return source !== undefined ? source : target;
+  }
+  const result = Array.isArray(target) ? [...target] : { ...target };
+  for (const key of Object.keys(source)) {
+    if (
+      typeof source[key] === "object" &&
+      source[key] !== null &&
+      !Array.isArray(source[key]) &&
+      typeof target[key] === "object" &&
+      target[key] !== null &&
+      !Array.isArray(target[key])
+    ) {
+      result[key] = deepMerge(target[key], source[key]);
+    } else {
+      result[key] = source[key];
     }
+  }
+  return result;
+}
 
-    $("problemSelector").addEventListener("change", (e) => loadProblem(e.target.value));
+// ── Tab switching ──────────────────────────────────────────
+function getActiveStep() {
+  for (let i = 0; i < STEP_COUNT; i++) {
+    const view = $(`view-step${i}`);
+    if (view && view.classList.contains("active")) return i;
+  }
+  return 0;
+}
 
-    // --- Tabs Logic ---
-    $("tab-step0").addEventListener("click", () => switchTab(0));
-    $("tab-step1").addEventListener("click", () => switchTab(1));
-    $("tab-step2").addEventListener("click", () => switchTab(2));
-    $("tab-step3").addEventListener("click", () => switchTab(3));
+function switchTab(step) {
+  for (let i = 0; i < STEP_COUNT; i++) {
+    const tab  = $(`tab-step${i}`);
+    const view = $(`view-step${i}`);
+    if (tab)  tab.classList.toggle("active",  i === step);
+    if (view) view.classList.toggle("active", i === step);
+  }
+  refreshStep(step);
+}
 
-    function switchTab(step) {
-      [0,1,2,3].forEach(i => {
-        $(`tab-step${i}`).classList.toggle("active", step === i);
-        $(`view-step${i}`).classList.toggle("active", step === i);
-      });
-      if (step === 0) draw();
-      if (step === 2) { refreshStep2UI(); drawStep2(); }
-      if (step === 3) { refreshStep3UI(); drawStep3Plot(); }
+function refreshStep(step) {
+  switch (step) {
+    case 0: refreshStep0(); break;
+    case 1: refreshStep1(); break;
+    case 2: refreshStep2(); break;
+    case 3: refreshStep3(); break;
+    case 4: refreshStep4(); break;
+    case 5: refreshStep5(); break;
+    case 6: refreshStep6(); break;
+  }
+}
+
+for (let i = 0; i < STEP_COUNT; i++) {
+  const btn = $(`tab-step${i}`);
+  if (btn) btn.addEventListener("click", () => switchTab(i));
+}
+
+// ── Shared math-rendering helper ──────────────────────────
+function mathEl(expression, tag = "span") {
+  const el = document.createElement(tag);
+  if (window.katex) {
+    try {
+      katex.render(expression, el, { throwOnError: false, trust: false });
+    } catch {
+      el.textContent = expression;
     }
+  } else {
+    el.textContent = expression;
+  }
+  return el;
+}
 
+function renderMath(el, expression) {
+  if (window.katex) {
+    try {
+      katex.render(expression, el, { throwOnError: false, trust: false });
+      return;
+    } catch {}
+  }
+  el.textContent = expression;
+}
 
-    // --- Math & Rendering Helpers ---
-    function math(element, expression) {
-      element.textContent = expression;
-      if (window.katex) {
-        try { katex.render(expression, element, { throwOnError: false, trust: false }); } 
-        catch { element.textContent = expression; }
+// ── Shared equation-row builder ───────────────────────────
+// Creates:  [LHS label]  [input] ^{basis[0]} +  [input] ^{basis[1]} +  [input] ^{basis[2]}
+// valArr is a live 3-element array; onChange is called after each keystroke.
+function buildEqRow(parent, lhsTex, valArr, basisNames, color, onChange) {
+  const row = document.createElement("div");
+  row.className = "eq-row";
+
+  const lhs = document.createElement("div");
+  lhs.className = "eq-lhs";
+  renderMath(lhs, lhsTex);
+  row.appendChild(lhs);
+
+  for (let i = 0; i < 3; i++) {
+    const inp = document.createElement("input");
+    inp.type = "text";
+    inp.className = "short";
+    inp.value = valArr[i] || "";
+    inp.addEventListener("input", e => {
+      valArr[i] = e.target.value;
+      if (onChange) onChange();
+    });
+    row.appendChild(inp);
+
+    const bLbl = document.createElement("span");
+    bLbl.className = "eq-basis" + (color === ORANGE ? " vehicle" : "");
+    renderMath(bLbl, `\\hat{${basisNames[i]}}${i < 2 ? " +" : ""}`);
+    row.appendChild(bLbl);
+  }
+
+  parent.appendChild(row);
+  return row;
+}
+
+// ── Canvas sizing helper ──────────────────────────────────
+function sizeCanvas(canvas) {
+  if (!image) return;
+  canvas.width  = image.naturalWidth;
+  canvas.height = image.naturalHeight;
+}
+
+// ── Quadrant bounds helper ────────────────────────────────
+function quadBounds(view, canvasEl) {
+  const [col, row] = QUADRANTS[view];
+  return {
+    left:   col === 0 ? 0      : split.x,
+    top:    row === 0 ? 0      : split.y,
+    width:  col === 0 ? split.x : canvasEl.width  - split.x,
+    height: row === 0 ? split.y : canvasEl.height - split.y
+  };
+}
+
+// ── Draw quadrant dividers on a canvas 2d context ─────────
+function drawDividers(ctx, canvasEl) {
+  ctx.save();
+  ctx.strokeStyle = "#555";
+  ctx.lineWidth   = Math.max(2, canvasEl.width / 900);
+  ctx.beginPath();
+  ctx.moveTo(split.x, 0);           ctx.lineTo(split.x, canvasEl.height);
+  ctx.moveTo(0, split.y);           ctx.lineTo(canvasEl.width, split.y);
+  ctx.stroke();
+  ctx.restore();
+}
+
+// ── Draw a filled arrowhead on a 2-d context ─────────────
+function drawArrow(ctx, x1, y1, x2, y2, color, lineWidth = 3) {
+  const angle = Math.atan2(y2 - y1, x2 - x1);
+  const hl    = 12;
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.fillStyle   = color;
+  ctx.lineWidth   = lineWidth;
+  ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(x2, y2);
+  ctx.lineTo(x2 - hl * Math.cos(angle - 0.45), y2 - hl * Math.sin(angle - 0.45));
+  ctx.lineTo(x2 - hl * Math.cos(angle + 0.45), y2 - hl * Math.sin(angle + 0.45));
+  ctx.closePath(); ctx.fill();
+  ctx.restore();
+}
+
+// ── Helper: numeric from a string (returns NaN if not parseable) ──
+function toNum(str) {
+  const n = parseFloat(String(str).trim());
+  return isFinite(n) ? n : NaN;
+}
+
+// ── Helper: vector of numbers from a 3-element string array ──
+function vecNums(arr) {
+  if (!Array.isArray(arr) || arr.length !== 3) return null;
+  const v = arr.map(toNum);
+  return v.some(isNaN) ? null : v;
+}
+
+// ── Helper: 3x3 matrix from a 3x3 string array ───────────
+function matNums(arr) {
+  if (!Array.isArray(arr) || arr.length !== 3) return null;
+  const m = arr.map(row => {
+    if (!Array.isArray(row) || row.length !== 3) return null;
+    const r = row.map(toNum);
+    return r.some(isNaN) ? null : r;
+  });
+  return m.some(r => r === null) ? null : m;
+}
+
+// ── Matrix multiply (3x3 · 3x1 → 3x1) ───────────────────
+function matVec(M, v) {
+  return [0, 1, 2].map(i =>
+    M[i][0] * v[0] + M[i][1] * v[1] + M[i][2] * v[2]
+  );
+}
+
+// ── Matrix transpose ──────────────────────────────────────
+function transpose(M) {
+  return [[0,1,2].map(j => M[j][0]),
+          [0,1,2].map(j => M[j][1]),
+          [0,1,2].map(j => M[j][2])];
+}
+
+// ── Helper: get ordered inertial/vehicle basis names ─────
+function basisNames(type) {
+  const names = progress.step2.vectors
+    .filter(v => v.type === type)
+    .map(v => v.name);
+  const fallback = type === "inertial-fixed"
+    ? ["I_1","I_2","I_3"]
+    : ["V_1","V_2","V_3"];
+  while (names.length < 3) names.push(fallback[names.length]);
+  return names;
+}
+
+// ── Helper: friendly frame label ─────────────────────────
+function frameLabel(type) {
+  return type === "vehicle-fixed"
+    ? progress.step0.frames.vehicle || "B"
+    : progress.step0.frames.inertial || "N";
+}
+
+// ── Status helpers ────────────────────────────────────────
+function setStatus0(msg) {
+  const el = $("status0"); if (el) el.textContent = msg;
+}
+function setStatus2(msg) {
+  const el = $("status2"); if (el) el.textContent = msg;
+}
+
+// ── Save, export, import listeners ───────────────────────
+$("saveBtn").addEventListener("click", () => {
+  persist();
+  setSaveStatus("Saved in this browser ✓");
+  setTimeout(() => setSaveStatus(""), 3000);
+});
+
+$("exportBtn").addEventListener("click", () => {
+  persist();
+  const blob = new Blob(
+    [JSON.stringify(progress, null, 2)],
+    { type: "application/json" }
+  );
+  const url  = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href     = url;
+  link.download = `${currentProblemId || "dynamics"}_progress.json`;
+  link.click();
+  URL.revokeObjectURL(url);
+});
+
+$("importInput").addEventListener("change", async e => {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  try {
+    const imported = JSON.parse(await file.text());
+    if (!imported.step0 || !imported.step1) {
+      throw new Error("File does not look like a Dynamics Helper export.");
+    }
+    progress    = deepMerge(emptyProgress(), imported);
+    ptPlacement = null; selectedPtLabel = null;
+    vecPlacement = null; selectedVecIdx = null;
+    $("cancelPlaceBtn").hidden = true;
+    persist();
+    refreshStep(getActiveStep());
+    setSaveStatus("Progress imported ✓");
+    setTimeout(() => setSaveStatus(""), 3000);
+  } catch (err) {
+    alert("Could not import: " + err.message);
+  }
+  e.target.value = "";
+});
+
+// Make the hidden file input trigger when the label is clicked
+$("importInput").parentElement.addEventListener("click", () => {
+  $("importInput").click();
+});
+
+// ═══════════════════════════════════════════════════════════
+//  END OF CHUNK 2  —  paste Chunk 3 directly below this line
+// ═══════════════════════════════════════════════════════════
+</script>
+
+<script>
+// ═══════════════════════════════════════════════════════════
+//  CHUNK 3 — Step 0: Frames, Points, Canvas, Assumptions
+// ═══════════════════════════════════════════════════════════
+
+// ── Refresh Step 0 UI from progress ──────────────────────
+function refreshStep0() {
+  refreshFrameUI();
+  renderPoints();
+  renderAssumptions();
+  renderReferenceSelectors();
+  drawCanvas0();
+}
+
+// ── Frame UI ──────────────────────────────────────────────
+function refreshFrameUI() {
+  $("inertialFrame").value = progress.step0.frames.inertial || "";
+  $("vehicleFrame").value  = progress.step0.frames.vehicle  || "";
+  renderFramePreview();
+  updatePointTypeLabels();
+}
+
+function renderFramePreview() {
+  const div = $("framePreview");
+  div.replaceChildren();
+
+  for (const [label, val] of [
+    ["Inertial: ", progress.step0.frames.inertial],
+    ["Vehicle: ",  progress.step0.frames.vehicle]
+  ]) {
+    const line = document.createElement("div");
+    line.style.marginBottom = "4px";
+    line.append(document.createTextNode(label));
+    line.append(mathEl(`\\tilde{${val || "?"}}`));
+    div.append(line);
+  }
+}
+
+function updatePointTypeLabels() {
+  const vf = progress.step0.frames.vehicle  || "not named";
+  const inf = progress.step0.frames.inertial || "not named";
+  $("pointType").options[0].textContent = `Vehicle-fixed  (~${vf})`;
+  $("pointType").options[1].textContent = `Inertial-fixed (~${inf})`;
+}
+
+$("saveFramesBtn").addEventListener("click", () => {
+  const inertial = $("inertialFrame").value.trim();
+  const vehicle  = $("vehicleFrame").value.trim();
+
+  if (
+    !/^[A-Za-z][A-Za-z0-9_]*$/.test(inertial) ||
+    !/^[A-Za-z][A-Za-z0-9_]*$/.test(vehicle)
+  ) {
+    setStatus0(
+      "Each frame name must start with a letter and contain only " +
+      "letters, numbers, or underscores."
+    );
+    return;
+  }
+
+  progress.step0.frames = { inertial, vehicle };
+  persist();
+  refreshFrameUI();
+  renderPoints();        // update tilde labels in log
+  setStatus0("Frame names saved.");
+});
+
+// ── Points log ────────────────────────────────────────────
+function renderPoints() {
+  const log = $("pointsLog");
+  log.replaceChildren();
+
+  for (const point of progress.step0.points) {
+    const row = document.createElement("div");
+    row.className =
+      "item-row" + (selectedPtLabel === point.label ? " selected" : "");
+
+    // Select / highlight button
+    const selBtn = document.createElement("button");
+    selBtn.className = "label-btn";
+    renderMath(
+      selBtn,
+      `${point.label}\\quad\\tilde{${frameLabel(point.type) || "?"}}`
+    );
+    selBtn.addEventListener("click", () => {
+      selectedPtLabel =
+        selectedPtLabel === point.label ? null : point.label;
+      renderPoints();
+      drawCanvas0();
+    });
+
+    // Delete button
+    const delBtn = document.createElement("button");
+    delBtn.className = "small red";
+    delBtn.textContent = "✕";
+    delBtn.addEventListener("click", () => {
+      if (ptPlacement && ptPlacement.point === point) {
+        ptPlacement = null;
+        $("cancelPlaceBtn").hidden = true;
       }
-    }
+      progress.step0.points =
+        progress.step0.points.filter(p => p !== point);
 
-    function frameName(type) { return type === "vehicle-fixed" ? progress.step0.frames.vehicle : progress.step0.frames.inertial; }
+      if (selectedPtLabel === point.label) selectedPtLabel = null;
 
-    function createEqRow(parent, labelTex, inputsArr, basisVecs, color, onChange) {
-      const row = document.createElement("div");
-      row.style.display = "flex"; row.style.alignItems = "center"; row.style.marginBottom = "8px";
-      
-      const lbl = document.createElement("div");
-      lbl.style.width = "140px";
-      math(lbl, labelTex);
-      row.appendChild(lbl);
-
-      for(let i=0; i<3; i++) {
-        const inp = document.createElement("input");
-        inp.style.width = "60px"; inp.style.margin = "0 5px"; inp.style.textAlign = "center";
-        inp.value = inputsArr[i] || "";
-        inp.addEventListener("input", (e) => { inputsArr[i] = e.target.value; onChange(); });
-        row.appendChild(inp);
-        
-        const bLbl = document.createElement("div");
-        math(bLbl, `\\hat{${basisVecs[i]}} ${i<2 ? '+' : ''}`);
-        bLbl.style.color = color;
-        row.appendChild(bLbl);
+      // Clear reference if deleted point was a reference
+      if (progress.step0.references.vehicle === point.label) {
+        progress.step0.references.vehicle = null;
       }
-      parent.appendChild(row);
-    }
-
-
-
-    // ==========================================
-    //                 STEP 0
-    // ==========================================
-
-    function refreshStep0UI() {
-      $("inertialFrame").value = progress.step0.frames.inertial || "";
-      $("vehicleFrame").value = progress.step0.frames.vehicle || "";
-
-      const preview = $("framePreview");
-      preview.replaceChildren();
-      for (const [desc, val] of [["Inertial: ", progress.step0.frames.inertial], ["Vehicle: ", progress.step0.frames.vehicle]]) {
-        const line = document.createElement("div");
-        line.append(document.createTextNode(desc));
-        const rendered = document.createElement("span");
-        math(rendered, `\\tilde{${val || "?"}}`);
-        line.append(rendered);
-        preview.append(line);
+      if (progress.step0.references.inertial === point.label) {
+        progress.step0.references.inertial = null;
       }
-
-      $("pointType").options[0].textContent = `Vehicle-fixed (${progress.step0.frames.vehicle || "not named"})`;
-      $("pointType").options[1].textContent = `Inertial-fixed (${progress.step0.frames.inertial || "not named"})`;
 
       renderPoints();
+      renderReferenceSelectors();
+      drawCanvas0();
+      persist();
+    });
+
+    row.append(selBtn, delBtn);
+    log.append(row);
+  }
+
+  renderReferenceSelectors();
+}
+
+// ── Reference selectors ───────────────────────────────────
+function renderReferenceSelectors() {
+  for (const [type, selId, key] of [
+    ["vehicle-fixed",  "vehicleRef",  "vehicle"],
+    ["inertial-fixed", "inertialRef", "inertial"]
+  ]) {
+    const sel = $(selId);
+    sel.replaceChildren();
+    sel.add(new Option("— none —", ""));
+
+    const eligible = progress.step0.points
+      .filter(p => p.type === type);
+
+    eligible.forEach(p => sel.add(new Option(p.label, p.label)));
+
+    // Clear stale reference
+    const saved = progress.step0.references[key];
+    if (!eligible.some(p => p.label === saved)) {
+      progress.step0.references[key] = null;
+    }
+    sel.value = progress.step0.references[key] || "";
+  }
+}
+
+$("vehicleRef").addEventListener("change", e => {
+  progress.step0.references.vehicle = e.target.value || null;
+  persist();
+});
+$("inertialRef").addEventListener("change", e => {
+  progress.step0.references.inertial = e.target.value || null;
+  persist();
+});
+
+// ── Add point ─────────────────────────────────────────────
+$("addPointBtn").addEventListener("click", () => {
+  if (ptPlacement) {
+    setStatus0("Finish or cancel the current point first.");
+    return;
+  }
+  if (
+    !progress.step0.frames.inertial ||
+    !progress.step0.frames.vehicle
+  ) {
+    setStatus0("Set both frame names before adding points.");
+    return;
+  }
+
+  const label = $("pointLabel").value.trim();
+  const type  = $("pointType").value;
+
+  if (
+    !/^[A-Za-z0-9_]{1,20}$/.test(label) ||
+    progress.step0.points.some(p => p.label === label)
+  ) {
+    setStatus0("Enter a unique label (letters, numbers, underscores, ≤20 chars).");
+    return;
+  }
+
+  const point = { label, type, clicks: {} };
+  progress.step0.points.push(point);
+  $("pointLabel").value = "";
+
+  if (type === "vehicle-fixed") {
+    ptPlacement = { point, nextIdx: 0 };
+    $("cancelPlaceBtn").hidden = false;
+    setStatus0(`Click ${label} in the ${QLABELS[VIEW_ORDER[0]]} view.`);
+  } else {
+    setStatus0(`Inertial-fixed point ${label} logged.`);
+    persist();
+  }
+
+  renderPoints();
+  drawCanvas0();
+});
+
+$("cancelPlaceBtn").addEventListener("click", () => {
+  if (!ptPlacement) return;
+  progress.step0.points =
+    progress.step0.points.filter(p => p !== ptPlacement.point);
+  ptPlacement = null;
+  $("cancelPlaceBtn").hidden = true;
+  setStatus0("Point placement cancelled.");
+  renderPoints();
+  drawCanvas0();
+  persist();
+});
+
+// ── Canvas 0 — click handler ──────────────────────────────
+const canvas0 = $("canvas0");
+const ctx0    = canvas0.getContext("2d");
+
+canvas0.addEventListener("click", e => {
+  if (!ptPlacement || !image || !split) return;
+
+  const rect = canvas0.getBoundingClientRect();
+  const x = (e.clientX - rect.left) * canvas0.width  / rect.width;
+  const y = (e.clientY - rect.top)  * canvas0.height / rect.height;
+
+  if (x < 0 || x >= canvas0.width || y < 0 || y >= canvas0.height) return;
+
+  const col  = x < split.x ? 0 : 1;
+  const row  = y < split.y ? 0 : 1;
+  const view = Object.keys(QUADRANTS).find(
+    k => QUADRANTS[k][0] === col && QUADRANTS[k][1] === row
+  );
+
+  const expected = VIEW_ORDER[ptPlacement.nextIdx];
+  if (view !== expected) {
+    setStatus0(`Click in the ${QLABELS[expected]} view next.`);
+    return;
+  }
+
+  const area = quadBounds(view, canvas0);
+  ptPlacement.point.clicks[view] = [
+    Number(((x - area.left) / area.width).toFixed(5)),
+    Number(((y - area.top)  / area.height).toFixed(5))
+  ];
+
+  ptPlacement.nextIdx += 1;
+
+  if (ptPlacement.nextIdx === VIEW_ORDER.length) {
+    ptPlacement = null;
+    $("cancelPlaceBtn").hidden = true;
+    setStatus0("Point placed in all four views. ✓");
+    persist();
+  } else {
+    const next = VIEW_ORDER[ptPlacement.nextIdx];
+    setStatus0(`Now click in the ${QLABELS[next]} view.`);
+  }
+
+  drawCanvas0();
+});
+
+// ── Canvas 0 — draw ───────────────────────────────────────
+function drawCanvas0() {
+  if (!image || !split) return;
+
+  sizeCanvas(canvas0);
+  ctx0.clearRect(0, 0, canvas0.width, canvas0.height);
+  ctx0.drawImage(image, 0, 0);
+  drawDividers(ctx0, canvas0);
+
+  const radius   = Math.max(5, canvas0.width / 180);
+  const fontSize = Math.max(13, canvas0.width / 85);
+  ctx0.font = `${fontSize}px Arial`;
+
+  for (const point of progress.step0.points) {
+    const color =
+      point.type === "vehicle-fixed" ? ORANGE : BLUE;
+
+    for (const [view, fracs] of Object.entries(point.clicks || {})) {
+      if (!QUADRANTS[view]) continue;
+      const area = quadBounds(view, canvas0);
+      const px = area.left + fracs[0] * area.width;
+      const py = area.top  + fracs[1] * area.height;
+
+      // Blue ring for selected point
+      if (selectedPtLabel === point.label) {
+        ctx0.save();
+        ctx0.strokeStyle = BLUE;
+        ctx0.lineWidth   = Math.max(3, radius / 2);
+        ctx0.beginPath();
+        ctx0.arc(px, py, radius + 6, 0, 2 * Math.PI);
+        ctx0.stroke();
+        ctx0.restore();
+      }
+
+      ctx0.fillStyle = color;
+      ctx0.beginPath();
+      ctx0.arc(px, py, radius, 0, 2 * Math.PI);
+      ctx0.fill();
+
+      ctx0.fillStyle = color;
+      ctx0.fillText(point.label, px + radius + 4, py - radius);
+    }
+  }
+}
+
+// ── Assumptions ───────────────────────────────────────────
+function renderAssumptions() {
+  const log = $("assumptionsLog");
+  log.replaceChildren();
+
+  progress.step0.assumptions.forEach((item, idx) => {
+    const card = document.createElement("div");
+    card.className = "card";
+
+    const hdr = document.createElement("div");
+    hdr.className = "card-header";
+
+    const title = document.createElement("strong");
+    title.textContent = `Assumption ${idx + 1}`;
+    hdr.append(title);
+
+    const btnRow = document.createElement("div");
+
+    const editBtn = document.createElement("button");
+    editBtn.className = "small grey";
+    editBtn.textContent = "Edit";
+    editBtn.addEventListener("click", () => {
+      editAssumpIdx = idx;
+      $("assumpText").value   = item.assumption || "";
+      $("assumpWhy").value    = item.why        || "";
+      $("assumpReason").value = item.reasonable || "";
+      $("saveAssumpBtn").textContent  = "Save Changes";
+      $("cancelAssumpBtn").hidden = false;
+      $("assumpText").focus();
+    });
+
+    const delBtn = document.createElement("button");
+    delBtn.className = "small red";
+    delBtn.textContent = "✕";
+    delBtn.addEventListener("click", () => {
+      progress.step0.assumptions.splice(idx, 1);
+      resetAssumpForm();
       renderAssumptions();
+      persist();
+    });
+
+    btnRow.append(editBtn, delBtn);
+    hdr.append(btnRow);
+    card.append(hdr);
+
+    for (const [title, key] of [
+      ["Assumption",          "assumption"],
+      ["Why",                 "why"],
+      ["Reasonable because",  "reasonable"]
+    ]) {
+      const p = document.createElement("p");
+      const b = document.createElement("strong");
+      b.textContent = `${title}: `;
+      p.append(b, document.createTextNode(item[key] || ""));
+      card.append(p);
     }
 
-    function renderReferences() {
-      for (const [type, selectId, key] of [["vehicle-fixed", "vehicleReference", "vehicle"], ["inertial-fixed", "inertialReference", "inertial"]]) {
-        const select = $(selectId);
-        select.replaceChildren();
-        select.add(new Option("Select a point", ""));
-        const eligible = progress.step0.points.filter(p => p.type === type);
-        eligible.forEach(p => select.add(new Option(p.label, p.label)));
-        
-        if (!eligible.some(p => p.label === progress.step0.references[key])) {
-          progress.step0.references[key] = null;
-        }
-        select.value = progress.step0.references[key] || "";
+    log.append(card);
+  });
+}
+
+function resetAssumpForm() {
+  editAssumpIdx = null;
+  $("assumpText").value   = "";
+  $("assumpWhy").value    = "";
+  $("assumpReason").value = "";
+  $("saveAssumpBtn").textContent = "Add Assumption";
+  $("cancelAssumpBtn").hidden    = true;
+}
+
+$("saveAssumpBtn").addEventListener("click", () => {
+  const item = {
+    assumption: $("assumpText").value.trim(),
+    why:        $("assumpWhy").value.trim(),
+    reasonable: $("assumpReason").value.trim()
+  };
+
+  if (Object.values(item).some(v => !v)) {
+    setStatus0("Complete all three assumption fields before saving.");
+    return;
+  }
+
+  if (editAssumpIdx === null) {
+    progress.step0.assumptions.push(item);
+  } else {
+    progress.step0.assumptions[editAssumpIdx] = item;
+  }
+
+  resetAssumpForm();
+  renderAssumptions();
+  persist();
+  setStatus0("Assumption saved.");
+});
+
+$("cancelAssumpBtn").addEventListener("click", resetAssumpForm);
+
+// ═══════════════════════════════════════════════════════════
+//  END OF CHUNK 3  —  paste Chunk 4 directly below this line
+// ═══════════════════════════════════════════════════════════
+</script>
+
+<script>
+// ═══════════════════════════════════════════════════════════
+//  CHUNK 4 — Step 1 and Step 2: Vectors, Equations, Rotation
+// ═══════════════════════════════════════════════════════════
+
+// ══════════════════════════════
+//  STEP 1
+// ══════════════════════════════
+
+function refreshStep1() {
+  $("s1-hypothesis").value = progress.step1.hypothesis || "";
+  $("s1-guidepost").value  = progress.step1.guidepost  || "";
+  $("s1-difficulty").value = progress.step1.difficulty || "";
+}
+
+["hypothesis", "guidepost", "difficulty"].forEach(key => {
+  $(`s1-${key}`).addEventListener("input", e => {
+    progress.step1[key] = e.target.value;
+    persist();
+  });
+});
+
+// ══════════════════════════════
+//  STEP 2 — Basis Vectors
+// ══════════════════════════════
+
+const canvas2 = $("canvas2");
+const ctx2    = canvas2.getContext("2d");
+
+function refreshStep2() {
+  $("s2-vehDesc").value = progress.step2.vehDesc || "";
+  $("s2-ineDesc").value = progress.step2.ineDesc  || "";
+  renderVectorsLog();
+  buildEquationPanel();
+  buildRotationPanel();
+  drawCanvas2();
+}
+
+// ── Description listeners ─────────────────────────────────
+$("s2-vehDesc").addEventListener("input", e => {
+  progress.step2.vehDesc = e.target.value; persist();
+});
+$("s2-ineDesc").addEventListener("input", e => {
+  progress.step2.ineDesc = e.target.value; persist();
+});
+
+// ── Add Vector ────────────────────────────────────────────
+$("addVecBtn").addEventListener("click", () => {
+  if (vecPlacement) {
+    setStatus2("Finish placing the current vector first.");
+    return;
+  }
+
+  const name = $("vecName").value.trim();
+  const type = $("vecFrame").value;
+
+  if (!name) { setStatus2("Enter a vector name."); return; }
+
+  const count = progress.step2.vectors.filter(v => v.type === type).length;
+  if (count >= 3) {
+    setStatus2(`Each frame may have at most 3 basis vectors.`);
+    return;
+  }
+
+  const vec = { name, type, view: null, base: null, tip: null };
+  progress.step2.vectors.push(vec);
+  selectedVecIdx = progress.step2.vectors.length - 1;
+  $("vecName").value = "";
+
+  vecPlacement = { vec, step: 1 };
+  setStatus2(`Drawing ${name}: click to place the BASE.`);
+
+  renderVectorsLog();
+  buildEquationPanel();
+  buildRotationPanel();
+  drawCanvas2();
+});
+
+// ── Vectors log ───────────────────────────────────────────
+function renderVectorsLog() {
+  const log = $("vectorsLog");
+  log.replaceChildren();
+
+  progress.step2.vectors.forEach((vec, idx) => {
+    const row = document.createElement("div");
+    row.className =
+      "item-row" + (selectedVecIdx === idx ? " selected" : "");
+
+    const selBtn = document.createElement("button");
+    selBtn.className = "label-btn";
+    renderMath(
+      selBtn,
+      `\\hat{${vec.name}}\\quad\\tilde{${frameLabel(vec.type) || "?"}}`
+    );
+    selBtn.style.color =
+      vec.type === "vehicle-fixed" ? ORANGE : BLUE;
+
+    selBtn.addEventListener("click", () => {
+      selectedVecIdx = selectedVecIdx === idx ? null : idx;
+      renderVectorsLog();
+      drawCanvas2();
+    });
+
+    const statusSpan = document.createElement("span");
+    statusSpan.className = "hint";
+    statusSpan.textContent =
+      vec.base && vec.tip
+        ? QLABELS[vec.view] || ""
+        : "needs draw";
+    statusSpan.style.color =
+      vec.base && vec.tip ? "#555" : "#c00";
+
+    const delBtn = document.createElement("button");
+    delBtn.className = "small red";
+    delBtn.textContent = "✕";
+    delBtn.addEventListener("click", () => {
+      progress.step2.vectors.splice(idx, 1);
+      if (selectedVecIdx === idx) selectedVecIdx = null;
+      vecPlacement = null;
+      setStatus2("Vector deleted.");
+      renderVectorsLog();
+      buildEquationPanel();
+      buildRotationPanel();
+      drawCanvas2();
+      persist();
+    });
+
+    row.append(selBtn, statusSpan, delBtn);
+    log.append(row);
+  });
+}
+
+// ── Canvas 2 — click ──────────────────────────────────────
+canvas2.addEventListener("click", e => {
+  if (!vecPlacement || !image || !split) return;
+
+  const rect = canvas2.getBoundingClientRect();
+  const x = (e.clientX - rect.left) * canvas2.width  / rect.width;
+  const y = (e.clientY - rect.top)  * canvas2.height / rect.height;
+
+  if (x < 0 || x >= canvas2.width || y < 0 || y >= canvas2.height) return;
+
+  const col  = x < split.x ? 0 : 1;
+  const row  = y < split.y ? 0 : 1;
+  const view = Object.keys(QUADRANTS).find(
+    k => QUADRANTS[k][0] === col && QUADRANTS[k][1] === row
+  );
+  const area = quadBounds(view, canvas2);
+  const xf   = (x - area.left) / area.width;
+  const yf   = (y - area.top)  / area.height;
+
+  if (vecPlacement.step === 1) {
+    vecPlacement.vec.view = view;
+    vecPlacement.vec.base = [xf, yf];
+    vecPlacement.step = 2;
+    setStatus2("Base placed. Click the TIP in the same quadrant.");
+  } else {
+    if (view !== vecPlacement.vec.view) {
+      setStatus2("The tip must be in the same quadrant as the base.");
+      return;
+    }
+    vecPlacement.vec.tip = [xf, yf];
+    vecPlacement = null;
+    setStatus2("Vector saved. ✓");
+    renderVectorsLog();
+    persist();
+  }
+  drawCanvas2();
+});
+
+// ── Canvas 2 — mousemove (rubber-band preview) ────────────
+canvas2.addEventListener("mousemove", e => {
+  if (!vecPlacement || vecPlacement.step !== 2 || !image || !split) return;
+
+  const rect = canvas2.getBoundingClientRect();
+  const mx   = (e.clientX - rect.left) * canvas2.width  / rect.width;
+  const my   = (e.clientY - rect.top)  * canvas2.height / rect.height;
+
+  drawCanvas2();   // repaint stable state
+
+  const area  = quadBounds(vecPlacement.vec.view, canvas2);
+  const startX = area.left + vecPlacement.vec.base[0] * area.width;
+  const startY = area.top  + vecPlacement.vec.base[1] * area.height;
+  const color  = vecPlacement.vec.type === "vehicle-fixed" ? ORANGE : BLUE;
+
+  drawArrow(ctx2, startX, startY, mx, my, color);
+});
+
+// ── Canvas 2 — draw ───────────────────────────────────────
+function drawCanvas2() {
+  if (!image || !split) return;
+
+  sizeCanvas(canvas2);
+  ctx2.clearRect(0, 0, canvas2.width, canvas2.height);
+  ctx2.drawImage(image, 0, 0);
+  drawDividers(ctx2, canvas2);
+
+  // Ghost Step 0 points
+  for (const point of progress.step0.points) {
+    const color =
+      point.type === "vehicle-fixed"
+        ? "rgba(250,70,22,0.45)"
+        : "rgba(0,48,135,0.45)";
+    const r = Math.max(4, canvas2.width / 220);
+
+    for (const [view, fracs] of Object.entries(point.clicks || {})) {
+      if (!QUADRANTS[view]) continue;
+      const area = quadBounds(view, canvas2);
+      const px   = area.left + fracs[0] * area.width;
+      const py   = area.top  + fracs[1] * area.height;
+
+      ctx2.fillStyle = color;
+      ctx2.beginPath();
+      ctx2.arc(px, py, r, 0, 2 * Math.PI);
+      ctx2.fill();
+    }
+  }
+
+  // Draw vectors
+  const fontSize = Math.max(13, canvas2.width / 85);
+  ctx2.font = `${fontSize}px Arial`;
+
+  progress.step2.vectors.forEach((vec, idx) => {
+    if (!vec.base || !vec.tip) return;
+
+    const color = vec.type === "vehicle-fixed" ? ORANGE : BLUE;
+    const area  = quadBounds(vec.view, canvas2);
+
+    const x1 = area.left + vec.base[0] * area.width;
+    const y1 = area.top  + vec.base[1] * area.height;
+    const x2 = area.left + vec.tip[0]  * area.width;
+    const y2 = area.top  + vec.tip[1]  * area.height;
+
+    // Glow if selected
+    if (selectedVecIdx === idx) {
+      ctx2.save();
+      ctx2.shadowColor = color;
+      ctx2.shadowBlur  = 14;
+      drawArrow(ctx2, x1, y1, x2, y2, color, 4);
+      ctx2.restore();
+    } else {
+      drawArrow(ctx2, x1, y1, x2, y2, color, 3);
+    }
+
+    // Label near midpoint
+    ctx2.fillStyle = color;
+    ctx2.fillText(
+      `^${vec.name}`,
+      (x1 + x2) / 2 + 8,
+      (y1 + y2) / 2 - 8
+    );
+  });
+}
+
+// ══════════════════════════════
+//  STEP 2 — Equation Panel
+// ══════════════════════════════
+
+function buildEquationPanel() {
+  const div = $("s2-equations");
+  div.replaceChildren();
+
+  const ine = basisNames("inertial-fixed");
+  const veh = basisNames("vehicle-fixed");
+
+  const vehRef = progress.step0.references.vehicle  || "V";
+  const ineRef = progress.step0.references.inertial || "I";
+  const vf  = progress.step0.frames.vehicle  || "B";
+  const inf = progress.step0.frames.inertial || "N";
+
+  if (!progress.step2.eqVals) {
+    progress.step2.eqVals = {
+      r:["","",""], theta:["","",""], v:["","",""], omega:["","",""]
+    };
+  }
+
+  buildEqRow(
+    div,
+    `\\vec{r}_{${vehRef}/${ineRef}} =`,
+    progress.step2.eqVals.r,
+    ine, BLUE, persist
+  );
+  buildEqRow(
+    div,
+    `\\vec{\\theta}_{\\tilde{${vf}}/\\tilde{${inf}}} =`,
+    progress.step2.eqVals.theta,
+    ine, BLUE, persist
+  );
+  buildEqRow(
+    div,
+    `{}^{\\tilde{${inf}}}\\vec{v}_{${vehRef}/${ineRef}} =`,
+    progress.step2.eqVals.v,
+    ine, BLUE, persist
+  );
+  buildEqRow(
+    div,
+    `{}^{\\tilde{${inf}}}\\vec{\\omega}_{\\tilde{${vf}}/\\tilde{${inf}}} =`,
+    progress.step2.eqVals.omega,
+    ine, BLUE, persist
+  );
+
+  // Geometry section
+  const geomHdr = document.createElement("h3");
+  geomHdr.textContent = "Geometry of the Vehicle";
+  div.appendChild(geomHdr);
+
+  const vehPts = progress.step0.points
+    .filter(p => p.type === "vehicle-fixed")
+    .map(p => p.label);
+
+  vehPts.forEach(pt => {
+    if (!progress.step2.geomVals[pt]) {
+      progress.step2.geomVals[pt] = ["", "", ""];
+    }
+    buildEqRow(
+      div,
+      `\\vec{r}_{${pt}/${vehRef}} =`,
+      progress.step2.geomVals[pt],
+      veh, ORANGE, persist
+    );
+  });
+}
+
+// ══════════════════════════════
+//  STEP 2 — Rotation Panel
+// ══════════════════════════════
+
+function buildRotationPanel() {
+  const ine = basisNames("inertial-fixed");
+  const veh = basisNames("vehicle-fixed");
+
+  const vf  = progress.step0.frames.vehicle  || "B";
+  const inf = progress.step0.frames.inertial || "N";
+
+  // Angle variable row
+  const angleDiv = $("s2-angleRow");
+  angleDiv.replaceChildren();
+
+  const angleLabel = document.createElement("span");
+  angleLabel.className = "eq-lhs";
+  renderMath(angleLabel, "\\text{Angle variable:}");
+  angleDiv.appendChild(angleLabel);
+
+  const angleInp = document.createElement("input");
+  angleInp.type      = "text";
+  angleInp.className = "short";
+  angleInp.value     = progress.step2.angleVar || "";
+  angleInp.placeholder = "e.g. q1";
+  angleInp.addEventListener("input", e => {
+    progress.step2.angleVar = e.target.value.trim();
+    persist();
+  });
+  angleDiv.appendChild(angleInp);
+
+  // 3×3 rotation matrix entries
+  const rotDiv = $("s2-rotEntries");
+  rotDiv.replaceChildren();
+
+  const outer = document.createElement("div");
+  outer.style.overflowX = "auto";
+
+  for (let i = 0; i < 3; i++) {
+    const row = document.createElement("div");
+    row.className = "eq-row";
+
+    for (let j = 0; j < 3; j++) {
+      if (!Array.isArray(progress.step2.rotVals[i])) {
+        progress.step2.rotVals[i] = ["", "", ""];
       }
+
+      const inp = document.createElement("input");
+      inp.type      = "text";
+      inp.className = "short";
+      inp.value     = progress.step2.rotVals[i][j] || "";
+      inp.addEventListener("input", e => {
+        progress.step2.rotVals[i][j] = e.target.value;
+        persist();
+      });
+      row.appendChild(inp);
+
+      const plus = (i < 2 || j < 2) ? "+" : "";
+      const termLbl = document.createElement("span");
+      termLbl.style.marginRight = "6px";
+      renderMath(
+        termLbl,
+        `\\hat{${veh[i]}}\\hat{${ine[j]}}^\\top ${plus}`
+      );
+      row.appendChild(termLbl);
     }
+    outer.appendChild(row);
+  }
+  rotDiv.appendChild(outer);
 
-    function renderPoints() {
-      const log = $("pointsLog");
-      log.replaceChildren();
+  // Show check button only if checks are enabled
+  const checkBtn = $("checkRotBtn");
+  checkBtn.hidden   = !checksEnabled();
+  checkBtn.disabled = !checksEnabled();
+}
 
-      for (const point of progress.step0.points) {
-        const row = document.createElement("div");
-        row.className = "point-row" + (selectedLabel === point.label ? " selected" : "");
+// ── Rotation check using Nerdamer ─────────────────────────
+$("checkRotBtn").addEventListener("click", () => {
+  if (!checksEnabled()) return;
+  checkRotationNerdamer();
+});
 
-        const select = document.createElement("button");
-        select.className = "secondary";
-        select.style.flex = "1";
-        select.style.textAlign = "left";
+function checkRotationNerdamer() {
+  const rotStatus = $("s2-rotStatus");
+  rotStatus.textContent = "Checking…";
 
-        const rendered = document.createElement("span");
-        math(rendered, `${point.label}\\quad\\tilde{${frameName(point.type) || "?"}}`);
-        select.append(rendered);
-        
-        select.addEventListener("click", () => {
-          selectedLabel = selectedLabel === point.label ? null : point.label;
-          renderPoints();
-          draw();
-        });
+  const thetaVals = progress.step2.eqVals.theta || ["", "", ""];
+  const rotVals   = progress.step2.rotVals;
+  const angleVar  = progress.step2.angleVar.trim();
 
-        const remove = document.createElement("button");
-        remove.textContent = "Delete";
-        remove.addEventListener("click", () => {
-          if (placement?.point === point) { placement = null; $("cancelPlacement").hidden = true; }
-          progress.step0.points = progress.step0.points.filter(c => c !== point);
-          if (selectedLabel === point.label) selectedLabel = null;
-          renderReferences(); renderPoints(); draw(); persist();
-        });
+  // Identify axis from theta vector
+  const nonzero = thetaVals
+    .map((v, i) => ({ v: v.trim(), i }))
+    .filter(entry => entry.v !== "" && entry.v !== "0");
 
-        row.append(select, remove);
-        log.append(row);
+  if (nonzero.length !== 1) {
+    rotStatus.textContent =
+      "Enter exactly one angle variable in the orientation " +
+      "vector (θ) and 0 in the other two.";
+    return;
+  }
+
+  const axisIdx = nonzero[0].i;
+
+  if (!angleVar || !/^[A-Za-z][A-Za-z0-9_]*$/.test(angleVar)) {
+    rotStatus.textContent =
+      "Enter the angle variable name in the Rotation Angle field above.";
+    return;
+  }
+
+  if (!window.nerdamer) {
+    rotStatus.textContent = "Nerdamer library not loaded.";
+    return;
+  }
+
+  // Build expected single-axis rotation
+  // R_V/I = I - sin(q)K + (1 - cos(q))K²
+  // where K is the skew-symmetric matrix for the rotation axis
+  const q = angleVar;
+  const expected = buildExpectedRotation(axisIdx, q);
+
+  const mismatches = [];
+  const rounded    = [];
+
+  for (let i = 0; i < 3; i++) {
+    for (let j = 0; j < 3; j++) {
+      const student  = (rotVals[i]?.[j] || "0").trim() || "0";
+      const want     = expected[i][j];
+
+      let match = false;
+      try {
+        const diff = nerdamer(
+          `simplify(trigsimp(${student} - (${want})))`
+        ).toString();
+        match = diff === "0";
+      } catch {
+        match = false;
       }
-      renderReferences();
-    }
 
-    function bounds(view, currentCanvas) {
-      const [col, row] = QUADRANTS[view];
-      return {
-        left: col === 0 ? 0 : split.x,
-        top: row === 0 ? 0 : split.y,
-        width: col === 0 ? split.x : currentCanvas.width - split.x,
-        height: row === 0 ? split.y : currentCanvas.height - split.y
-      };
-    }
+      if (!match) {
+        // Numeric fallback with several sample angles
+        const angles = [-1.13, -0.48, 0.21, 0.76, 1.38, 2.17];
+        let numMatch = true;
 
-    function draw() {
-      if (!image || !split) return;
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.drawImage(image, 0, 0);
-
-      ctx.strokeStyle = "#555";
-      ctx.lineWidth = Math.max(2, canvas.width / 900);
-      ctx.beginPath(); ctx.moveTo(split.x, 0); ctx.lineTo(split.x, canvas.height);
-      ctx.moveTo(0, split.y); ctx.lineTo(canvas.width, split.y); ctx.stroke();
-
-      const radius = Math.max(5, canvas.width / 180);
-      ctx.font = `${Math.max(14, canvas.width / 85)}px Arial`;
-
-      for (const point of progress.step0.points) {
-        if (point.type !== "vehicle-fixed") continue;
-
-        const color = point.type === "vehicle-fixed" ? "#FA4616" : "#003087";
-
-        for (const [view, fractions] of Object.entries(point.clicks || {})) {
-          if (!QUADRANTS[view]) continue;
-
-          const area = bounds(view, canvas);
-          const [xf, yf] = fractions;
-
-          const x = area.left + xf * area.width;
-          const y = area.top + yf * area.height;
-
-          if (selectedLabel === point.label) {
-            ctx.strokeStyle = "#003087";
-            ctx.lineWidth = Math.max(3, radius / 2);
-            ctx.beginPath();
-            ctx.arc(x, y, radius + 6, 0, 2 * Math.PI);
-            ctx.stroke();
+        for (const a of angles) {
+          try {
+            const sVal = nerdamer(student).evaluate({ [q]: a }).toString();
+            const wVal = nerdamer(want).evaluate({ [q]: a }).toString();
+            if (Math.abs(parseFloat(sVal) - parseFloat(wVal)) > 1e-3) {
+              numMatch = false; break;
+            }
+          } catch {
+            numMatch = false; break;
           }
-
-          ctx.fillStyle = color;
-          ctx.beginPath();
-          ctx.arc(x, y, radius, 0, 2 * Math.PI);
-          ctx.fill();
-          ctx.fillText(point.label, x + radius + 4, y - radius);
         }
+
+        if (numMatch) rounded.push(`(${i+1},${j+1})`);
+        else          mismatches.push(`(${i+1},${j+1})`);
       }
     }
+  }
 
-    function cancelPlacement() {
-      if (!placement) return;
-      progress.step0.points = progress.step0.points.filter(p => p !== placement.point);
-      placement = null; $("cancelPlacement").hidden = true; status("Point placement canceled.");
-      renderPoints(); draw(); persist();
+  if (mismatches.length === 0 && rounded.length === 0) {
+    rotStatus.textContent =
+      `✓ All 9 coefficients match a rotation about ` +
+      `inertial basis ${axisIdx + 1} through ${angleVar}.`;
+    rotStatus.style.color = "#2e7d32";
+  } else if (mismatches.length === 0) {
+    rotStatus.textContent =
+      `Entries ${rounded.join(", ")} pass within rounding ` +
+      `tolerance but could not be confirmed symbolically.`;
+    rotStatus.style.color = "#ad7800";
+  } else {
+    rotStatus.textContent =
+      `Revisit entries: ${mismatches.join(", ")}.` +
+      ` (Assumes frames coincide at ${angleVar}=0, right-hand rule.)`;
+    rotStatus.style.color = "#b71c1c";
+  }
+}
+
+// Build the 3×3 expected single-axis rotation symbolically as strings
+function buildExpectedRotation(axisIdx, q) {
+  // Rodrigues: R = I - sin(q)K + (1 - cos(q))K²
+  // K = skew-symmetric matrix for unit axis vector e_axisIdx
+
+  // For axis 0 (e1): K = [[0,0,0],[0,0,-1],[0,1,0]]
+  // For axis 1 (e2): K = [[0,0,1],[0,0,0],[-1,0,0]]
+  // For axis 2 (e3): K = [[0,-1,0],[1,0,0],[0,0,0]]
+
+  const K = [
+    [[0,0,0],[0,0,-1],[0,1,0]],   // axis 0
+    [[0,0,1],[0,0,0],[-1,0,0]],   // axis 1
+    [[0,-1,0],[1,0,0],[0,0,0]]    // axis 2
+  ][axisIdx];
+
+  // K² for each axis (precomputed)
+  const K2 = [
+    [[0,0,0],[0,-1,0],[0,0,-1]],  // axis 0 squared
+    [[-1,0,0],[0,0,0],[0,0,-1]],  // axis 1 squared
+    [[-1,0,0],[0,-1,0],[0,0,0]]   // axis 2 squared
+  ][axisIdx];
+
+  const result = [];
+  for (let i = 0; i < 3; i++) {
+    const row = [];
+    for (let j = 0; j < 3; j++) {
+      const identity = (i === j) ? 1 : 0;
+      const k  = K[i][j];
+      const k2 = K2[i][j];
+
+      // R_ij = identity - sin(q)*K_ij + (1 - cos(q))*K2_ij
+      let expr = `${identity}`;
+      if (k !== 0)  expr += ` + (${-k})*sin(${q})`;
+      if (k2 !== 0) expr += ` + (${k2})*(1 - cos(${q}))`;
+      row.push(expr);
     }
+    result.push(row);
+  }
+  return result;
+}
 
-    $("saveFrames").addEventListener("click", () => {
-      const inertial = $("inertialFrame").value.trim();
-      const vehicle = $("vehicleFrame").value.trim();
-      if (!/^[A-Za-z][A-Za-z0-9_]*$/.test(inertial) || !/^[A-Za-z][A-Za-z0-9_]*$/.test(vehicle)) {
-        status("Use a letter followed by optional letters, numbers, or underscores for each frame.");
-        return;
-      }
-      progress.step0.frames = { inertial, vehicle };
-      persist(); refreshStep0UI(); renderPoints(); status("Frame names saved in this browser.");
-    });
+// ═══════════════════════════════════════════════════════════
+//  END OF CHUNK 4  —  paste Chunk 5 directly below this line
+// ═══════════════════════════════════════════════════════════
+</script>
 
-    $("addPoint").addEventListener("click", () => {
-      if (placement) { status("Finish or cancel the current point first."); return; }
-      if (!progress.step0.frames.inertial || !progress.step0.frames.vehicle) { status("Name both reference frames first."); return; }
+<script>
+// ═══════════════════════════════════════════════════════════
+//  CHUNK 5 — Step 3: Mass, Inertia, Plotly 3D, Checks
+// ═══════════════════════════════════════════════════════════
 
-      const label = $("pointLabel").value.trim();
-      const type = $("pointType").value;
+// ══════════════════════════════
+//  STEP 3 — Refresh
+// ══════════════════════════════
 
-      if (!/^[A-Za-z0-9_]{1,20}$/.test(label) || progress.step0.points.some(p => p.label === label)) {
-        status("Enter a unique point label."); return;
-      }
+function refreshStep3() {
+  buildMassPanel();
+  buildCOMPanel();
+  buildInertiaPanel();
+  drawStep3Plot();
+}
 
-      const point = { label, type, clicks: {} };
-      progress.step0.points.push(point);
-      $("pointLabel").value = "";
+$("refreshPlot3Btn").addEventListener("click", drawStep3Plot);
 
-      if (type === "vehicle-fixed") {
-        placement = { point, nextIndex: 0 };
-        $("cancelPlacement").hidden = false;
-        status("Click this point in the Side view.");
-      } else {
-        status(`Inertial-fixed point ${label} logged.`); persist();
-      }
+// ── Shared helper: build one dyadic 3×3 block ────────────
+function buildDyadicBlock(parent, lhsTex, dataArr, basisVecs, onChange) {
+  const wrapper = document.createElement("div");
+  wrapper.style.marginBottom = "16px";
 
-      renderPoints(); draw();
-    });
+  const outer = document.createElement("div");
+  outer.style.display = "flex";
+  outer.style.alignItems = "flex-start";
+  outer.style.gap = "10px";
 
-    $("cancelPlacement").addEventListener("click", cancelPlacement);
+  // LHS label
+  const lhs = document.createElement("div");
+  lhs.style.minWidth = "130px";
+  lhs.style.paddingTop = "6px";
+  renderMath(lhs, lhsTex);
+  outer.appendChild(lhs);
 
-    canvas.addEventListener("click", (event) => {
-      if (!placement || !image || !split) return;
-      const rect = canvas.getBoundingClientRect();
-      const x = (event.clientX - rect.left) * canvas.width / rect.width;
-      const y = (event.clientY - rect.top) * canvas.height / rect.height;
-
-      if (x < 0 || x >= canvas.width || y < 0 || y >= canvas.height) return;
-
-      const col = x < split.x ? 0 : 1; const row = y < split.y ? 0 : 1;
-      const view = Object.keys(QUADRANTS).find(key => QUADRANTS[key][0] === col && QUADRANTS[key][1] === row);
-      const expected = VIEW_ORDER[placement.nextIndex];
-      
-      if (view !== expected) { status(`Click in the ${LABELS[expected]} view next.`); return; }
-
-      const area = bounds(view, canvas);
-      placement.point.clicks[view] = [
-        Number(((x - area.left) / area.width).toFixed(5)),
-        Number(((y - area.top) / area.height).toFixed(5))
-      ];
-
-      placement.nextIndex += 1;
-      if (placement.nextIndex === VIEW_ORDER.length) {
-        placement = null; $("cancelPlacement").hidden = true; status("Point placed in all four views."); persist();
-      } else {
-        status(`Now click in the ${LABELS[VIEW_ORDER[placement.nextIndex]]} view.`);
-      }
-      draw();
-    });
-
-    ["vehicleReference", "inertialReference"].forEach(id => {
-      $(id).addEventListener("change", (e) => {
-        const key = id === "vehicleReference" ? "vehicle" : "inertial";
-        progress.step0.references[key] = e.target.value || null;
-        persist();
+  // 3×3 grid
+  const grid = document.createElement("div");
+  for (let i = 0; i < 3; i++) {
+    const row = document.createElement("div");
+    row.className = "eq-row";
+    for (let j = 0; j < 3; j++) {
+      if (!Array.isArray(dataArr[i])) dataArr[i] = ["", "", ""];
+      const inp = document.createElement("input");
+      inp.type      = "text";
+      inp.className = "short";
+      inp.value     = dataArr[i][j] || "";
+      inp.addEventListener("input", e => {
+        dataArr[i][j] = e.target.value;
+        onChange();
       });
-    });
+      row.appendChild(inp);
 
-    function resetAssumptionForm() {
-      editAssumptionIndex = null;
-      ["assumption", "why", "reasonable"].forEach(id => $(id).value = "");
-      $("saveAssumption").textContent = "Add assumption";
-      $("cancelEdit").hidden = true;
+      const plus = (i < 2 || j < 2) ? "+" : "";
+      const lbl  = document.createElement("span");
+      lbl.style.marginRight = "6px";
+      renderMath(
+        lbl,
+        `\\hat{${basisVecs[i]}}\\hat{${basisVecs[j]}}^\\top${plus}`
+      );
+      row.appendChild(lbl);
+    }
+    grid.appendChild(row);
+  }
+  outer.appendChild(grid);
+  wrapper.appendChild(outer);
+  parent.appendChild(wrapper);
+}
+
+// ══════════════════════════════
+//  0th Moment — Mass
+// ══════════════════════════════
+
+function buildMassPanel() {
+  const div = $("s3-masses");
+  div.replaceChildren();
+
+  const vehPts = progress.step0.points
+    .filter(p => p.type === "vehicle-fixed")
+    .map(p => p.label);
+
+  if (vehPts.length === 0) {
+    div.textContent = "No vehicle-fixed points found. Add them in Step 0.";
+    return;
+  }
+
+  vehPts.forEach(pt => {
+    const row = document.createElement("div");
+    row.className = "eq-row";
+
+    const lbl = document.createElement("div");
+    lbl.className = "eq-lhs";
+    renderMath(lbl, `m_{${pt}} =`);
+    row.appendChild(lbl);
+
+    const inp = document.createElement("input");
+    inp.type      = "text";
+    inp.className = "short";
+    inp.value     = progress.step3.masses[pt] || "";
+    inp.addEventListener("input", e => {
+      progress.step3.masses[pt] = e.target.value;
+      persist();
+    });
+    row.appendChild(inp);
+    div.appendChild(row);
+  });
+
+  // Total mass row
+  const divider = document.createElement("hr");
+  divider.className = "section-divider";
+  div.appendChild(divider);
+
+  const totRow = document.createElement("div");
+  totRow.className = "eq-row";
+
+  const totLbl = document.createElement("div");
+  totLbl.className = "eq-lhs";
+  renderMath(totLbl, "M_{\\text{total}} =");
+  totRow.appendChild(totLbl);
+
+  const totInp = document.createElement("input");
+  totInp.type      = "text";
+  totInp.className = "short";
+  totInp.value     = progress.step3.totalMass || "";
+  totInp.addEventListener("input", e => {
+    progress.step3.totalMass = e.target.value;
+    persist();
+  });
+  totRow.appendChild(totInp);
+  div.appendChild(totRow);
+}
+
+// ── 0th Moment check ─────────────────────────────────────
+$("check0thBtn").addEventListener("click", () => {
+  if (!checksEnabled()) return;
+
+  const vehPts = progress.step0.points
+    .filter(p => p.type === "vehicle-fixed")
+    .map(p => p.label);
+
+  const masses = vehPts.map(pt => toNum(progress.step3.masses[pt]));
+  if (masses.some(isNaN)) {
+    alert("Enter numeric values for all individual masses first.");
+    return;
+  }
+
+  const computed = masses.reduce((a, b) => a + b, 0);
+  const student  = toNum(progress.step3.totalMass);
+
+  if (isNaN(student)) {
+    alert("Enter a numeric value for the total mass.");
+    return;
+  }
+
+  if (Math.abs(student - computed) < 1e-6) {
+    alert(`✓ Total mass is correct (${computed.toPrecision(6)}).`);
+  } else {
+    alert(
+      `Total mass does not match the sum of individual masses.\n` +
+      `Expected: ${computed.toPrecision(6)}\n` +
+      `Entered:  ${student.toPrecision(6)}`
+    );
+  }
+});
+
+// ══════════════════════════════
+//  1st Moment — COM
+// ══════════════════════════════
+
+function buildCOMPanel() {
+  const div = $("s3-com");
+  div.replaceChildren();
+
+  const veh    = basisNames("vehicle-fixed");
+  const vehRef = progress.step0.references.vehicle || "V";
+
+  if (!Array.isArray(progress.step3.r_com) ||
+      progress.step3.r_com.length !== 3) {
+    progress.step3.r_com = ["", "", ""];
+  }
+
+  // r_C/*
+  buildEqRow(
+    div,
+    `\\vec{r}_{C/${vehRef}} =`,
+    progress.step3.r_com,
+    veh, ORANGE, persist
+  );
+
+  const divider = document.createElement("hr");
+  divider.className = "section-divider";
+  div.appendChild(divider);
+
+  // r_p/C for each vehicle point
+  const vehPts = progress.step0.points
+    .filter(p => p.type === "vehicle-fixed")
+    .map(p => p.label);
+
+  vehPts.forEach(pt => {
+    if (!Array.isArray(progress.step3.r_p_com[pt]) ||
+        progress.step3.r_p_com[pt].length !== 3) {
+      progress.step3.r_p_com[pt] = ["", "", ""];
+    }
+    buildEqRow(
+      div,
+      `\\vec{r}_{${pt}/C} =`,
+      progress.step3.r_p_com[pt],
+      veh, ORANGE, persist
+    );
+  });
+}
+
+// ── 1st Moment check ──────────────────────────────────────
+$("check1stBtn").addEventListener("click", () => {
+  if (!checksEnabled()) return;
+
+  const vehPts = progress.step0.points
+    .filter(p => p.type === "vehicle-fixed")
+    .map(p => p.label);
+
+  const masses = vehPts.map(pt => toNum(progress.step3.masses[pt]));
+  if (masses.some(isNaN)) {
+    alert("Complete and check the 0th Moment section first.");
+    return;
+  }
+
+  const M = masses.reduce((a, b) => a + b, 0);
+  if (M === 0) { alert("Total mass cannot be zero."); return; }
+
+  // Compute expected COM from Step 2 geometry
+  const geom = vehPts.map(pt => vecNums(progress.step2.geomVals[pt]));
+  if (geom.some(g => g === null)) {
+    alert("Enter numeric geometry values for all vehicle points in Step 2.");
+    return;
+  }
+
+  const expected_com = [0, 1, 2].map(axis =>
+    vehPts.reduce((sum, pt, i) => sum + masses[i] * geom[i][axis], 0) / M
+  );
+
+  // Check student COM
+  const student_com = vecNums(progress.step3.r_com);
+  if (!student_com) {
+    alert("Enter numeric values for the Centre of Mass vector.");
+    return;
+  }
+
+  const comOk = expected_com.every(
+    (v, i) => Math.abs(v - student_com[i]) < 1e-4
+  );
+
+  if (!comOk) {
+    alert(
+      `Centre of Mass does not match.\n` +
+      `Expected: [${expected_com.map(v => v.toPrecision(5)).join(", ")}]\n` +
+      `Entered:  [${student_com.map(v => v.toPrecision(5)).join(", ")}]`
+    );
+    return;
+  }
+
+  // Check each r_p/C
+  for (let i = 0; i < vehPts.length; i++) {
+    const pt      = vehPts[i];
+    const student = vecNums(progress.step3.r_p_com[pt]);
+    if (!student) {
+      alert(`Enter numeric values for r_{${pt}/C}.`);
+      return;
+    }
+    const expected = [0, 1, 2].map(
+      axis => geom[i][axis] - expected_com[axis]
+    );
+    const ok = expected.every(
+      (v, j) => Math.abs(v - student[j]) < 1e-4
+    );
+    if (!ok) {
+      alert(
+        `r_{${pt}/C} does not match.\n` +
+        `Expected: [${expected.map(v => v.toPrecision(5)).join(", ")}]\n` +
+        `Entered:  [${student.map(v => v.toPrecision(5)).join(", ")}]`
+      );
+      return;
+    }
+  }
+
+  // Store verified COM for plot
+  progress.step3._verified_com = expected_com;
+  persist();
+  drawStep3Plot();
+  alert("✓ Centre of Mass and all shifted positions are correct.");
+});
+
+// ══════════════════════════════
+//  2nd Moment — Inertia
+// ══════════════════════════════
+
+function buildInertiaPanel() {
+  const div = $("s3-inertia");
+  div.replaceChildren();
+
+  const veh    = basisNames("vehicle-fixed");
+  const vf     = progress.step0.frames.vehicle || "B";
+  const vehPts = progress.step0.points
+    .filter(p => p.type === "vehicle-fixed")
+    .map(p => p.label);
+
+  vehPts.forEach(pt => {
+    const hdr = document.createElement("h3");
+    hdr.textContent = `Point ${pt} about C`;
+    div.appendChild(hdr);
+
+    if (
+      !Array.isArray(progress.step3.j_p[pt]) ||
+      progress.step3.j_p[pt].length !== 3
+    ) {
+      progress.step3.j_p[pt] = [["","",""],["","",""],["","",""]];
     }
 
-    function renderAssumptions() {
-      const log = $("assumptionsLog");
-      log.replaceChildren();
-      progress.step0.assumptions.forEach((item, index) => {
-        const card = document.createElement("div");
-        card.className = "assumption";
-        const heading = document.createElement("strong");
-        heading.textContent = `Assumption ${index + 1}`;
-        card.append(heading);
+    buildDyadicBlock(
+      div,
+      `\\vec{J}_{${pt}/C} =`,
+      progress.step3.j_p[pt],
+      veh, persist
+    );
+  });
 
-        [["Assumption", "assumption"], ["Why", "why"], ["Reasonable because", "reasonable"]].forEach(([title, key]) => {
-          const p = document.createElement("p");
-          const label = document.createElement("strong");
-          label.textContent = `${title}: `;
-          p.append(label, document.createTextNode(item[key] || ""));
-          card.append(p);
-        });
+  // Total inertia
+  const totHdr = document.createElement("h3");
+  totHdr.textContent = "Total Vehicle Inertia about C";
+  div.appendChild(totHdr);
 
-        const edit = document.createElement("button");
-        edit.textContent = "Edit";
-        edit.addEventListener("click", () => {
-          editAssumptionIndex = index;
-          ["assumption", "why", "reasonable"].forEach(id => $(id).value = item[id] || "");
-          $("saveAssumption").textContent = "Save changes";
-          $("cancelEdit").hidden = false;
-        });
+  if (
+    !Array.isArray(progress.step3.j_total) ||
+    progress.step3.j_total.length !== 3
+  ) {
+    progress.step3.j_total = [["","",""],["","",""],["","",""]];
+  }
 
-        const remove = document.createElement("button");
-        remove.textContent = "Delete";
-        remove.addEventListener("click", () => {
-          progress.step0.assumptions.splice(index, 1);
-          resetAssumptionForm(); renderAssumptions(); persist();
-        });
+  buildDyadicBlock(
+    div,
+    `\\vec{J}_{\\tilde{${vf}}/C} =`,
+    progress.step3.j_total,
+    veh, persist
+  );
+}
 
-        card.append(edit, remove);
-        log.append(card);
-      });
+// ── 2nd Moment check ──────────────────────────────────────
+$("check2ndBtn").addEventListener("click", () => {
+  if (!checksEnabled()) return;
+
+  const vehPts = progress.step0.points
+    .filter(p => p.type === "vehicle-fixed")
+    .map(p => p.label);
+
+  const masses = vehPts.map(pt => toNum(progress.step3.masses[pt]));
+  if (masses.some(isNaN)) {
+    alert("Complete and check the 0th and 1st Moment sections first.");
+    return;
+  }
+
+  // Need verified r_p/C values
+  const rpc = vehPts.map(pt => vecNums(progress.step3.r_p_com[pt]));
+  if (rpc.some(r => r === null)) {
+    alert("Enter numeric values for all r_{p/C} vectors in the 1st Moment section.");
+    return;
+  }
+
+  // Compute expected J_p/C for each point using parallel axis theorem
+  const expectedJp = vehPts.map((pt, idx) => {
+    const m  = masses[idx];
+    const r  = rpc[idx];
+    const dx = r[0], dy = r[1], dz = r[2];
+    return [
+      [m*(dy*dy+dz*dz), -m*dx*dy,         -m*dx*dz        ],
+      [-m*dx*dy,         m*(dx*dx+dz*dz),  -m*dy*dz        ],
+      [-m*dx*dz,        -m*dy*dz,           m*(dx*dx+dy*dy)]
+    ];
+  });
+
+  // Check each J_p/C
+  for (let k = 0; k < vehPts.length; k++) {
+    const pt      = vehPts[k];
+    const student = matNums(progress.step3.j_p[pt]);
+    if (!student) {
+      alert(`Enter numeric values for J_{${pt}/C}.`); return;
     }
-
-    $("saveAssumption").addEventListener("click", () => {
-      const item = { assumption: $("assumption").value.trim(), why: $("why").value.trim(), reasonable: $("reasonable").value.trim() };
-      if (Object.values(item).some((value) => !value)) { status("Complete all three assumption fields."); return; }
-      
-      if (editAssumptionIndex === null) progress.step0.assumptions.push(item);
-      else progress.step0.assumptions[editAssumptionIndex] = item;
-      
-      resetAssumptionForm(); renderAssumptions(); persist(); status("Assumption saved.");
-    });
-    
-    $("cancelEdit").addEventListener("click", resetAssumptionForm);
-
-    // ==========================================
-    //                 STEP 1
-    // ==========================================
-
-    function refreshStep1UI() {
-      $("step1-hypothesis").value = progress.step1.hypothesis || "";
-      $("step1-guidepost").value = progress.step1.guidepost || "";
-      $("step1-difficulty").value = progress.step1.difficulty || "";
-    }
-
-    ["hypothesis", "guidepost", "difficulty"].forEach(id => {
-      $(`step1-${id}`).addEventListener("input", (e) => {
-        progress.step1[id] = e.target.value;
-        persist();
-      });
-    });
-
-    // ==========================================
-    //                 STEP 2
-    // ==========================================
-
-    function refreshStep2UI() {
-      $("vehDesc").value = progress.step2.vehDesc || "";
-      $("ineDesc").value = progress.step2.ineDesc || "";
-      renderVectorsLog();
-      renderStep2Equations();
-    }
-
-    ["vehDesc", "ineDesc"].forEach(id => {
-      $(id).addEventListener("input", (e) => {
-        progress.step2[id] = e.target.value;
-        persist();
-      });
-    });
-
-    $("addVecBtn").addEventListener("click", () => {
-      if (vecPlacement) { $("step2-status").textContent = "Finish placing the current vector first."; return; }
-      const name = $("vecName").value.trim();
-      const type = $("vecFrame").value;
-      if (!name) return $("step2-status").textContent = "Enter a vector name.";
-      
-      const count = progress.step2.vectors.filter(v => v.type === type).length;
-      if (count >= 3) return $("step2-status").textContent = "Max 3 vectors per frame.";
-
-      const vec = { name, type, base: null, tip: null, view: null };
-      progress.step2.vectors.push(vec);
-      selectedVecIndex = progress.step2.vectors.length - 1;
-      $("vecName").value = "";
-      
-      vecPlacement = { vec, step: 1 };
-      $("step2-status").textContent = `Drawing ${name}: Click to place the BASE.`;
-      renderVectorsLog();
-      drawStep2();
-    });
-
-    function renderVectorsLog() {
-      const log = $("vectorsLog");
-      log.replaceChildren();
-      
-      progress.step2.vectors.forEach((vec, idx) => {
-        const row = document.createElement("div");
-        row.className = "point-row" + (selectedVecIndex === idx ? " selected" : "");
-        
-        const btn = document.createElement("button");
-        btn.className = "secondary";
-        btn.style.flex = "1";
-        btn.style.textAlign = "left";
-        math(btn, `\\hat{${vec.name}}\\quad\\tilde{${frameName(vec.type) || "?"}}`);
-        
-        btn.addEventListener("click", () => {
-          selectedVecIndex = selectedVecIndex === idx ? null : idx;
-          renderVectorsLog();
-          drawStep2();
-        });
-
-        const delBtn = document.createElement("button");
-        delBtn.textContent = "Del";
-        delBtn.addEventListener("click", () => {
-          progress.step2.vectors.splice(idx, 1);
-          if (selectedVecIndex === idx) selectedVecIndex = null;
-          vecPlacement = null;
-          $("step2-status").textContent = "Vector deleted.";
-          renderVectorsLog();
-          drawStep2();
-          persist();
-        });
-
-        row.append(btn, delBtn);
-        log.append(row);
-      });
-    }
-
-    canvas2.addEventListener("click", (e) => {
-      if (!vecPlacement || !image || !split) return;
-      
-      const rect = canvas2.getBoundingClientRect();
-      const x = (e.clientX - rect.left) * canvas2.width / rect.width;
-      const y = (e.clientY - rect.top) * canvas2.height / rect.height;
-      const col = x < split.x ? 0 : 1; const row = y < split.y ? 0 : 1;
-      const view = Object.keys(QUADRANTS).find(k => QUADRANTS[k][0] === col && QUADRANTS[k][1] === row);
-      const area = bounds(view, canvas2);
-      
-      const xf = (x - area.left) / area.width;
-      const yf = (y - area.top) / area.height;
-
-      if (vecPlacement.step === 1) {
-        vecPlacement.vec.view = view;
-        vecPlacement.vec.base = [xf, yf];
-        vecPlacement.step = 2;
-        $("step2-status").textContent = "Base placed. Click to place the TIP in the same quadrant.";
-      } else if (vecPlacement.step === 2) {
-        if (view !== vecPlacement.vec.view) {
-          $("step2-status").textContent = "Tip must be in the same quadrant! Try again.";
+    for (let i = 0; i < 3; i++) {
+      for (let j = 0; j < 3; j++) {
+        if (Math.abs(student[i][j] - expectedJp[k][i][j]) > 1e-4) {
+          alert(
+            `J_{${pt}/C} entry (${i+1},${j+1}) is incorrect.\n` +
+            `Expected: ${expectedJp[k][i][j].toPrecision(5)}\n` +
+            `Entered:  ${student[i][j].toPrecision(5)}`
+          );
           return;
         }
-        vecPlacement.vec.tip = [xf, yf];
-        vecPlacement = null;
-        $("step2-status").textContent = "Vector saved.";
-        renderVectorsLog();
-        persist();
       }
-      drawStep2();
+    }
+  }
+
+  // Compute and check total J
+  const expectedTotal = [[0,0,0],[0,0,0],[0,0,0]];
+  expectedJp.forEach(Jp => {
+    for (let i = 0; i < 3; i++)
+      for (let j = 0; j < 3; j++)
+        expectedTotal[i][j] += Jp[i][j];
+  });
+
+  const studentTotal = matNums(progress.step3.j_total);
+  if (!studentTotal) {
+    alert("Enter numeric values for the total inertia tensor."); return;
+  }
+
+  for (let i = 0; i < 3; i++) {
+    for (let j = 0; j < 3; j++) {
+      if (Math.abs(studentTotal[i][j] - expectedTotal[i][j]) > 1e-4) {
+        alert(
+          `Total inertia entry (${i+1},${j+1}) is incorrect.\n` +
+          `Expected: ${expectedTotal[i][j].toPrecision(5)}\n` +
+          `Entered:  ${studentTotal[i][j].toPrecision(5)}`
+        );
+        return;
+      }
+    }
+  }
+
+  // Store for downstream steps
+  progress.step3._verified_j_total = expectedTotal;
+  persist();
+  alert("✓ All individual inertia tensors and the total are correct.");
+});
+
+// ══════════════════════════════
+//  Step 3 — Plotly 3D Plot
+// ══════════════════════════════
+
+function drawStep3Plot() {
+  const veh    = basisNames("vehicle-fixed");
+  const vehPts = progress.step0.points
+    .filter(p => p.type === "vehicle-fixed")
+    .map(p => p.label);
+
+  const traces = [];
+  const xs = [], ys = [], zs = [], txts = [];
+
+  // Vehicle points
+  vehPts.forEach(pt => {
+    const coords = vecNums(progress.step2.geomVals[pt]);
+    if (!coords) return;
+    xs.push(coords[0]); ys.push(coords[1]); zs.push(coords[2]);
+    txts.push(pt);
+  });
+
+  if (xs.length > 0) {
+    traces.push({
+      type: "scatter3d", mode: "markers+text",
+      x: xs, y: ys, z: zs,
+      text: txts, textposition: "top right",
+      marker: { color: ORANGE, size: 7 }
+    });
+  }
+
+  // Origin (vehicle reference point)
+  traces.push({
+    type: "scatter3d", mode: "markers+text",
+    x: [0], y: [0], z: [0], text: ["*"],
+    textposition: "bottom center",
+    marker: { color: BLUE, size: 9 }
+  });
+
+  // COM (if verified or entered numerically)
+  const comCoords =
+    progress.step3._verified_com ||
+    (vecNums(progress.step3.r_com)
+      ? vecNums(progress.step3.r_com) : null);
+
+  if (comCoords) {
+    traces.push({
+      type: "scatter3d", mode: "markers+text",
+      x: [comCoords[0]], y: [comCoords[1]], z: [comCoords[2]],
+      text: ["C"], textposition: "top right",
+      marker: { color: "black", size: 12, symbol: "cross" }
+    });
+  }
+
+  // Axis arrows
+  const allCoords = [
+    ...xs.map((x, i) => [x, ys[i], zs[i]]),
+    [0, 0, 0]
+  ];
+  if (comCoords) allCoords.push(comCoords);
+
+  let scale = 1;
+  if (allCoords.length > 0) {
+    const flat = allCoords.flat().map(Math.abs);
+    scale = Math.max(1, ...flat) * 0.7;
+  }
+
+  const axisColors = ["#c62828", "#2e7d32", "#ad7800"];
+  for (let i = 0; i < 3; i++) {
+    const end = [0, 0, 0];
+    end[i] = scale;
+    traces.push({
+      type: "scatter3d", mode: "lines+text",
+      x: [0, end[0]], y: [0, end[1]], z: [0, end[2]],
+      text: ["", `$\\hat{${veh[i]}}$`],
+      textposition: "top center",
+      line: { color: axisColors[i], width: 6 }
+    });
+  }
+
+  const layout = {
+    margin: { l: 0, r: 0, b: 0, t: 0 },
+    showlegend: false,
+    scene: {
+      aspectmode: "data",
+      xaxis: { title: veh[0] },
+      yaxis: { title: veh[1] },
+      zaxis: { title: veh[2] }
+    }
+  };
+
+  Plotly.newPlot("plot3", traces, layout, { responsive: true });
+}
+
+// ═══════════════════════════════════════════════════════════
+//  END OF CHUNK 5  —  paste Chunk 6 directly below this line
+// ═══════════════════════════════════════════════════════════
+</script>
+
+<script>
+// ═══════════════════════════════════════════════════════════
+//  CHUNK 6 — Step 4: Momentum and Pyodide/SymPy checks
+// ═══════════════════════════════════════════════════════════
+
+// This Python runs inside the student's browser via Pyodide.
+// It accepts only a restricted arithmetic/trigonometry syntax.
+// It returns comparison results, not expected expressions.
+const MOMENTUM_CHECK_PY = String.raw`
+import ast
+import json
+import math
+import sympy as sp
+
+data = json.loads(momentum_check_input)
+
+class InputError(ValueError):
+    pass
+
+def expression(value):
+    text = str(value).strip().replace("^", "**")
+    text = text.replace(r"\sin", "sin").replace(r"\cos", "cos")
+    text = text.replace(r"\pi", "pi")
+
+    if not text or len(text) > 300:
+        raise InputError("A component is blank or too long.")
+
+    try:
+        root = ast.parse(text, mode="eval")
+    except SyntaxError:
+        raise InputError("An expression could not be parsed.")
+
+    if sum(1 for _ in ast.walk(root)) > 80:
+        raise InputError("An expression is too complex.")
+
+    def walk(node):
+        if isinstance(node, ast.Constant):
+            if type(node.value) in (int, float):
+                return sp.sympify(node.value)
+            raise InputError("Only numeric constants are allowed.")
+
+        if isinstance(node, ast.Name):
+            if node.id == "pi":
+                return sp.pi
+            if node.id.startswith("__") or len(node.id) > 40:
+                raise InputError("Invalid variable name.")
+            return sp.Symbol(node.id, real=True)
+
+        if isinstance(node, ast.UnaryOp):
+            result = walk(node.operand)
+            if isinstance(node.op, ast.UAdd):
+                return result
+            if isinstance(node.op, ast.USub):
+                return -result
+
+        if isinstance(node, ast.BinOp):
+            left, right = walk(node.left), walk(node.right)
+            if isinstance(node.op, ast.Add):
+                return left + right
+            if isinstance(node.op, ast.Sub):
+                return left - right
+            if isinstance(node.op, ast.Mult):
+                return left * right
+            if isinstance(node.op, ast.Div):
+                return left / right
+            if isinstance(node.op, ast.Pow):
+                if not right.is_number or right.free_symbols:
+                    raise InputError("Powers must be numeric.")
+                exponent = float(right)
+                if not math.isfinite(exponent) or abs(exponent) > 8:
+                    raise InputError("Power is too large.")
+                return left ** right
+
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and len(node.args) == 1
+            and not node.keywords
+        ):
+            argument = walk(node.args[0])
+            if node.func.id == "sin":
+                return sp.sin(argument)
+            if node.func.id == "cos":
+                return sp.cos(argument)
+
+        raise InputError(
+            "Use variables, numbers, arithmetic, sin(), or cos()."
+        )
+
+    return walk(root.body)
+
+def vector(values, name):
+    if not isinstance(values, list) or len(values) != 3:
+        raise InputError(name + " needs three components.")
+    return sp.Matrix([expression(value) for value in values])
+
+def matrix(values, name):
+    if (
+        not isinstance(values, list)
+        or len(values) != 3
+        or any(not isinstance(row, list) or len(row) != 3
+                for row in values)
+    ):
+        raise InputError(name + " needs nine coefficients.")
+    return sp.Matrix([[expression(x) for x in row] for row in values])
+
+def exact(a, b):
+    difference = sp.trigsimp(sp.simplify(a - b))
+    return difference == 0 or difference.is_zero is True
+
+def compare(a, b):
+    if exact(a, b):
+        return "exact"
+
+    symbols = sorted((a - b).free_symbols, key=lambda s: s.name)
+    for base in (-1.31, -0.47, 0.37, 0.94, 1.73, 2.36):
+        substitutions = {
+            symbol: base + index * 0.29
+            for index, symbol in enumerate(symbols)
+        }
+        try:
+            av = complex(sp.N(a.subs(substitutions)))
+            bv = complex(sp.N(b.subs(substitutions)))
+        except (TypeError, ValueError, ZeroDivisionError, OverflowError):
+            return "different"
+
+        if not all(math.isfinite(x) for x in
+                   (av.real, av.imag, bv.real, bv.imag)):
+            return "different"
+        if abs(av.imag) > 1e-9 or abs(bv.imag) > 1e-9:
+            return "different"
+        if not math.isclose(av.real, bv.real,
+                            rel_tol=1e-3, abs_tol=1e-5):
+            return "different"
+
+    return "rounded"
+
+try:
+    student = vector(data["student"], "Your momentum")
+
+    if data["kind"] == "linear":
+        mass = expression(data["mass"])
+        velocity = vector(data["velocity"], "Step 2 velocity")
+        expected = mass * velocity
+
+    elif data["kind"] == "angular":
+        inertia = matrix(data["inertia"], "Step 3 inertia")
+        rotation = matrix(data["rotation"], "Step 2 rotation")
+        omega = vector(data["omega"], "Step 2 angular velocity")
+
+        orthogonality = rotation * rotation.T - sp.eye(3)
+        if not all(exact(orthogonality[i, j], 0)
+                   for i in range(3) for j in range(3)):
+            raise InputError(
+                "Step 2 rotation is not confirmed orthogonal."
+            )
+        if not exact(rotation.det(), 1):
+            raise InputError(
+                "Step 2 rotation does not have determinant +1."
+            )
+
+        # R maps inertial components into vehicle components.
+        # J is expressed in vehicle components; G is requested
+        # in inertial components.
+        expected = rotation.T * inertia * rotation * omega
+    else:
+        raise InputError("Unknown momentum check.")
+
+    results = [compare(student[i], expected[i]) for i in range(3)]
+    output = {"status": "ok", "components": results}
+
+except (InputError, KeyError, TypeError, ValueError,
+        ZeroDivisionError) as error:
+    output = {"status": "unverified", "message": str(error)}
+
+json.dumps(output)
+`;
+
+// ── Lazy-load the symbolic engine on first use ───────────
+let pyodidePromise = null;
+
+async function ensurePyodide() {
+  if (pyodideReady && pyodide) return pyodide;
+  if (pyodidePromise) return pyodidePromise;
+
+  $("pyodide-overlay").classList.add("visible");
+
+  pyodidePromise = (async () => {
+    const base =
+      "https://cdn.jsdelivr.net/pyodide/v0.26.4/full/";
+
+    if (!window.loadPyodide) {
+      const script = document.createElement("script");
+      script.src = `${base}pyodide.js`;
+
+      await new Promise((resolve, reject) => {
+        script.onload = resolve;
+        script.onerror = () =>
+          reject(new Error("Could not download Pyodide."));
+        document.head.appendChild(script);
+      });
+    }
+
+    const engine = await window.loadPyodide({
+      indexURL: base
     });
 
-    canvas2.addEventListener("mousemove", (e) => {
-      if (!vecPlacement || vecPlacement.step !== 2 || !image || !split) return;
-      
-      const rect = canvas2.getBoundingClientRect();
-      const x = (e.clientX - rect.left) * canvas2.width / rect.width;
-      const y = (e.clientY - rect.top) * canvas2.height / rect.height;
-      
-      drawStep2(); // Redraw base state
-      
-      const color = vecPlacement.vec.type === "vehicle-fixed" ? "#FA4616" : "#003087";
-      const area = bounds(vecPlacement.vec.view, canvas2);
-      const startX = area.left + vecPlacement.vec.base[0] * area.width;
-      const startY = area.top + vecPlacement.vec.base[1] * area.height;
+    await engine.loadPackage("sympy");
+    pyodide = engine;
+    pyodideReady = true;
+    return engine;
+  })();
 
-      ctx2.strokeStyle = color; ctx2.fillStyle = color; ctx2.lineWidth = 3;
-      ctx2.beginPath(); ctx2.moveTo(startX, startY); ctx2.lineTo(x, y); ctx2.stroke();
-      
-      const angle = Math.atan2(y - startY, x - startX);
-      ctx2.beginPath();
-      ctx2.moveTo(x, y);
-      ctx2.lineTo(x - 12 * Math.cos(angle - 0.5), y - 12 * Math.sin(angle - 0.5));
-      ctx2.lineTo(x - 12 * Math.cos(angle + 0.5), y - 12 * Math.sin(angle + 0.5));
-      ctx2.fill();
-    });
+  try {
+    return await pyodidePromise;
+  } catch (error) {
+    pyodidePromise = null;
+    throw error;
+  } finally {
+    $("pyodide-overlay").classList.remove("visible");
+  }
+}
 
-    function drawStep2() {
-      if (!image || !split) return;
-      canvas2.width = image.naturalWidth;
-      canvas2.height = image.naturalHeight;
-      ctx2.clearRect(0, 0, canvas2.width, canvas2.height);
-      ctx2.drawImage(image, 0, 0);
+async function runMomentumCheck(payload) {
+  const engine = await ensurePyodide();
 
-      ctx2.strokeStyle = "#555"; ctx2.lineWidth = 2;
-      ctx2.beginPath(); ctx2.moveTo(split.x, 0); ctx2.lineTo(split.x, canvas2.height);
-      ctx2.moveTo(0, split.y); ctx2.lineTo(canvas2.width, split.y); ctx2.stroke();
+  // Pass JSON as data. Do not interpolate student text into
+  // executable Python source.
+  engine.globals.set(
+    "momentum_check_input",
+    JSON.stringify(payload)
+  );
 
-      progress.step0.points.forEach(pt => {
-        const color = pt.type === "vehicle-fixed" ? "rgba(250, 70, 22, 0.4)" : "rgba(0, 48, 135, 0.4)";
-        for (const [view, fracs] of Object.entries(pt.clicks || {})) {
-          if (!QUADRANTS[view]) continue;
-          const area = bounds(view, canvas2);
-          const x = area.left + fracs[0] * area.width;
-          const y = area.top + fracs[1] * area.height;
-          ctx2.fillStyle = color;
-          ctx2.beginPath(); ctx2.arc(x, y, 5, 0, Math.PI * 2); ctx2.fill();
-        }
-      });
+  try {
+    const result = await engine.runPythonAsync(
+      MOMENTUM_CHECK_PY
+    );
+    return JSON.parse(result);
+  } finally {
+    engine.globals.delete("momentum_check_input");
+  }
+}
 
-      progress.step2.vectors.forEach((vec, idx) => {
-        if (!vec.base || !vec.tip) return;
-        const color = vec.type === "vehicle-fixed" ? "#FA4616" : "#003087";
-        const area = bounds(vec.view, canvas2);
-        
-        const startX = area.left + vec.base[0] * area.width;
-        const startY = area.top + vec.base[1] * area.height;
-        const endX = area.left + vec.tip[0] * area.width;
-        const endY = area.top + vec.tip[1] * area.height;
+// ── Build the two Step 4 equation rows ───────────────────
+function refreshStep4() {
+  if (!progress.step4) {
+    progress.step4 = emptyProgress().step4;
+  }
 
-        ctx2.strokeStyle = color; ctx2.fillStyle = color; ctx2.lineWidth = 3;
-        
-        if (selectedVecIndex === idx) {
-          ctx2.shadowColor = color; ctx2.shadowBlur = 10;
-        } else {
-          ctx2.shadowBlur = 0;
-        }
+  for (const key of ["linear", "angular"]) {
+    if (
+      !Array.isArray(progress.step4[key]) ||
+      progress.step4[key].length !== 3
+    ) {
+      progress.step4[key] = ["", "", ""];
+    }
+  }
 
-        ctx2.beginPath(); ctx2.moveTo(startX, startY); ctx2.lineTo(endX, endY); ctx2.stroke();
-        
-        const angle = Math.atan2(endY - startY, endX - startX);
-        ctx2.beginPath();
-        ctx2.moveTo(endX, endY);
-        ctx2.lineTo(endX - 12 * Math.cos(angle - 0.5), endY - 12 * Math.sin(angle - 0.5));
-        ctx2.lineTo(endX - 12 * Math.cos(angle + 0.5), endY - 12 * Math.sin(angle + 0.5));
-        ctx2.fill();
-        ctx2.shadowBlur = 0;
-      });
+  const inertialName =
+    progress.step0.frames.inertial || "I";
+  const vehicleName =
+    progress.step0.frames.vehicle || "V";
+  const inertialPoint =
+    progress.step0.references.inertial || "?";
+  const inertialBasis = basisNames("inertial-fixed");
+
+  const linearPanel = $("s4-linear");
+  const angularPanel = $("s4-angular");
+  linearPanel.replaceChildren();
+  angularPanel.replaceChildren();
+
+  buildEqRow(
+    linearPanel,
+    `{}^{\\tilde{${inertialName}}}` +
+    `\\vec{H}_{\\tilde{${vehicleName}}/${inertialPoint}} =`,
+    progress.step4.linear,
+    inertialBasis,
+    BLUE,
+    persist
+  );
+
+  buildEqRow(
+    angularPanel,
+    `{}^{\\tilde{${inertialName}}}` +
+    `\\vec{G}_{\\tilde{${vehicleName}}/C} =`,
+    progress.step4.angular,
+    inertialBasis,
+    BLUE,
+    persist
+  );
+}
+
+function momentumFeedback(kind, message, color) {
+  const panel = kind === "linear"
+    ? $("s4-linear")
+    : $("s4-angular");
+
+  let feedback = panel.querySelector(".momentum-feedback");
+  if (!feedback) {
+    feedback = document.createElement("p");
+    feedback.className = "momentum-feedback status-bar";
+    panel.appendChild(feedback);
+  }
+
+  feedback.textContent = message;
+  feedback.style.color = color;
+}
+
+async function checkMomentum(kind) {
+  if (!checksEnabled()) return;
+
+  const step2 = progress.step2;
+  const step3 = progress.step3;
+
+  const payload = kind === "linear"
+    ? {
+        kind: "linear",
+        student: progress.step4.linear,
+        mass: step3.totalMass,
+        velocity: step2.eqVals?.v
+      }
+    : {
+        kind: "angular",
+        student: progress.step4.angular,
+        inertia: step3.j_total,
+        rotation: step2.rotVals,
+        omega: step2.eqVals?.omega
+      };
+
+  const button = kind === "linear"
+    ? $("checkLinBtn")
+    : $("checkAngBtn");
+
+  button.disabled = true;
+  momentumFeedback(
+    kind,
+    "Loading or running symbolic check…",
+    BLUE
+  );
+
+  try {
+    const result = await runMomentumCheck(payload);
+
+    if (result.status !== "ok") {
+      momentumFeedback(
+        kind,
+        `Could not verify: ${result.message}`,
+        "#ad7800"
+      );
+      return;
     }
 
-    function renderStep2Equations() {
-      const eqDiv = $("step2-equations");
-      const rotDiv = $("step2-rotation");
-      eqDiv.innerHTML = ""; rotDiv.innerHTML = "";
+    const outcomes = result.components;
+    if (outcomes.every(value => value === "exact")) {
+      momentumFeedback(
+        kind,
+        "All three components are symbolically equivalent.",
+        "#2e7d32"
+      );
+    } else if (
+      outcomes.every(value =>
+        value === "exact" || value === "rounded"
+      )
+    ) {
+      momentumFeedback(
+        kind,
+        "Consistent within rounding tolerance at tested values; " +
+        "this is not an exact symbolic proof.",
+        "#ad7800"
+      );
+    } else {
+      const revisit = outcomes
+        .map((value, index) =>
+          value === "different" ? index + 1 : null
+        )
+        .filter(value => value !== null);
 
-      const vehRef = progress.step0.references.vehicle || "V";
-      const ineRef = progress.step0.references.inertial || "I";
-      const vf = progress.step0.frames.vehicle || "B";
-      const inf = progress.step0.frames.inertial || "N";
+      momentumFeedback(
+        kind,
+        `Revisit component(s): ${revisit.join(", ")}.`,
+        "#b71c1c"
+      );
+    }
+  } catch (error) {
+    momentumFeedback(
+      kind,
+      `Symbolic engine unavailable: ${error.message}`,
+      "#b71c1c"
+    );
+  } finally {
+    button.disabled = !checksEnabled();
+  }
+}
 
-      const vehPts = progress.step0.points.filter(p => p.type === "vehicle-fixed").map(p => p.label);
-      const ineVecs = progress.step2.vectors.filter(v => v.type === "inertial-fixed").map(v=>v.name);
-      const vehVecs = progress.step2.vectors.filter(v => v.type === "vehicle-fixed").map(v=>v.name);
-      
-      while(ineVecs.length < 3) ineVecs.push("I_" + (ineVecs.length+1));
-      while(vehVecs.length < 3) vehVecs.push("V_" + (vehVecs.length+1));
+$("checkLinBtn").addEventListener(
+  "click",
+  () => checkMomentum("linear")
+);
+$("checkAngBtn").addEventListener(
+  "click",
+  () => checkMomentum("angular")
+);
 
-      // 1. Standard Vectors
-      createEqRow(eqDiv, `\\vec{r}_{${vehRef}/${ineRef}} =`, progress.step2.eqVals.r, ineVecs, "#003087", persist);
-      createEqRow(eqDiv, `\\vec{\\theta}_{\\tilde{${vf}}/\\tilde{${inf}}} =`, progress.step2.eqVals.theta, ineVecs, "#003087", persist);
-      createEqRow(eqDiv, `^{\\tilde{${inf}}}\\vec{v}_{${vehRef}/${ineRef}} =`, progress.step2.eqVals.v, ineVecs, "#003087", persist);
-      createEqRow(eqDiv, `^{\\tilde{${inf}}}\\vec{\\omega}_{\\tilde{${vf}}/\\tilde{${inf}}} =`, progress.step2.eqVals.omega, ineVecs, "#003087", persist);
+// ═══════════════════════════════════════════════════════════
+//  END OF CHUNK 6 — paste Chunk 7 below this line
+// ═══════════════════════════════════════════════════════════
+</script>
 
-      // 2. Geometry of Vehicle
-      const geomHeader = document.createElement("h4");
-      geomHeader.textContent = "Geometry of the Vehicle";
-      eqDiv.appendChild(geomHeader);
+<script>
+"use strict";
 
-      vehPts.forEach(pt => {
-        if (!progress.step2.geomVals[pt]) progress.step2.geomVals[pt] = ["","",""];
-        createEqRow(eqDiv, `\\vec{r}_{${pt}/${vehRef}} =`, progress.step2.geomVals[pt], vehVecs, "#FA4616", persist);
-      });
+// ═══════════════════════════════════════════════════════════
+// CHUNK 7 — Step 5: Free-body diagram, loads, totals
+// ═══════════════════════════════════════════════════════════
 
-      // 3. Rotation Matrix
-      const rRow = document.createElement("div");
-      rRow.style.display = "flex";
-      const rLbl = document.createElement("div");
-      math(rLbl, `\\mathcal{R}_{\\tilde{${vf}}/\\tilde{${inf}}} =`);
-      rLbl.style.width = "100px"; rLbl.style.marginTop = "10px";
-      rRow.appendChild(rLbl);
+function ensureStep5Data() {
+  if (!progress.step5) progress.step5 = emptyProgress().step5;
+  const s = progress.step5;
 
-      const rMat = document.createElement("div");
-      for(let i=0; i<3; i++) {
-        const tr = document.createElement("div");
-        tr.style.display = "flex"; tr.style.marginBottom = "5px";
-        for(let j=0; j<3; j++) {
-          const inp = document.createElement("input");
-          inp.style.width = "50px"; inp.style.margin = "0 5px";
-          inp.value = progress.step2.rotVals[i][j];
-          inp.addEventListener("input", (e) => { progress.step2.rotVals[i][j] = e.target.value; persist(); });
-          tr.appendChild(inp);
-          const tLbl = document.createElement("div");
-          math(tLbl, `\\hat{${vehVecs[i]}}\\hat{${ineVecs[j]}}^\\top ${i<2||j<2 ? '+' : ''}`);
-          tLbl.style.marginRight = "10px";
-          tr.appendChild(tLbl);
-        }
-        rMat.appendChild(tr);
-      }
-      rRow.appendChild(rMat);
-      rotDiv.appendChild(rRow);
+  if (!Array.isArray(s.loads)) s.loads = [];
+  if (!["vehicle", "inertial"].includes(s.totBasis)) {
+    s.totBasis = "vehicle";
+  }
+  if (!Array.isArray(s.totF) || s.totF.length !== 3) {
+    s.totF = ["", "", ""];
+  }
+  if (!Array.isArray(s.totM) || s.totM.length !== 3) {
+    s.totM = ["", "", ""];
+  }
+  if (s.angleVal === undefined) s.angleVal = "0";
+  return s;
+}
+
+function step5Snapshot() {
+  const s = ensureStep5Data();
+  return JSON.stringify({
+    loads: s.loads.map(load => ({
+      type: load.type,
+      target: load.target,
+      id: load.id,
+      basis: load.basis,
+      f_vals: load.f_vals,
+      m_vals: load.m_vals
+    })),
+    totals_basis: s.totBasis,
+    totals_f_vals: s.totF,
+    totals_m_vals: s.totM,
+    step2_rotation: progress.step2.rotVals,
+    theta_components: progress.step2.eqVals?.theta
+  });
+}
+
+function invalidateStep5Check() {
+  ensureStep5Data().check_result = null;
+}
+
+function setStep5Message(message, color = BLUE) {
+  let line = $("s5-message");
+  if (!line) {
+    line = document.createElement("p");
+    line.id = "s5-message";
+    line.className = "status-bar";
+    $("s5-totals").append(line);
+  }
+  line.textContent = message;
+  line.style.color = color;
+}
+
+function refreshStep5() {
+  const s = ensureStep5Data();
+  $("s5-totBasis").value = s.totBasis;
+  $("s5-angleVal").value = s.angleVal;
+  renderStep5Loads();
+  renderStep5Totals();
+  drawStep5Plot();
+  applyChecksEnabled();
+}
+
+function step5VehicleTargets() {
+  const names = progress.step0.points
+    .filter(point => point.type === "vehicle-fixed")
+    .map(point => point.label);
+
+  return [...new Set([...names, "C"])];
+}
+
+function makeStep5Dialog(type, editIndex = null) {
+  const targets = step5VehicleTargets();
+  const assumptions = progress.step0.assumptions || [];
+
+  if (!assumptions.length) {
+    alert("Add an assumption in Step 0 first.");
+    return;
+  }
+
+  const s = ensureStep5Data();
+  const old = editIndex === null ? null : s.loads[editIndex];
+
+  const backdrop = document.createElement("div");
+  Object.assign(backdrop.style, {
+    position: "fixed",
+    inset: "0",
+    background: "rgba(0,0,0,.55)",
+    zIndex: "2000",
+    display: "grid",
+    placeItems: "center",
+    padding: "16px"
+  });
+
+  const form = document.createElement("form");
+  form.className = "panel";
+  Object.assign(form.style, {
+    width: "min(100%, 480px)",
+    maxHeight: "90vh",
+    overflowY: "auto",
+    margin: "0"
+  });
+
+  const heading = document.createElement("h2");
+  heading.textContent =
+    `${old ? "Edit" : "Add"} ${type === "force" ? "Force" : "Torque"}`;
+  form.append(heading);
+
+  function field(caption, input) {
+    const label = document.createElement("label");
+    label.textContent = caption;
+    label.style.display = "block";
+    label.style.marginTop = "10px";
+    label.append(document.createElement("br"), input);
+    form.append(label);
+    return input;
+  }
+
+  const target = document.createElement("select");
+  targets.forEach(name => target.add(new Option(name, name)));
+  target.value = targets.includes(old?.target)
+    ? old.target : targets[0];
+  field(type === "force"
+    ? "Point where force is applied"
+    : "Point associated with torque", target);
+
+  const id = document.createElement("input");
+  id.type = "text";
+  id.maxLength = 3;
+  id.required = true;
+  id.value = old?.id || "";
+  field("Designation (1–3 letters or numbers)", id);
+
+  const basis = document.createElement("select");
+  basis.add(new Option("Vehicle-fixed basis", "vehicle"));
+  basis.add(new Option("Inertial-fixed basis", "inertial"));
+  basis.value = old?.basis || "vehicle";
+  field("Component basis", basis);
+
+  const assumption = document.createElement("select");
+  assumptions.forEach((item, index) => {
+    const title = item.assumption?.trim() || "(unnamed assumption)";
+    assumption.add(new Option(
+      `${index + 1}. ${title.slice(0, 65)}`, String(index)
+    ));
+  });
+
+  const oldIndex = Number(old?.assumptionIndex);
+  assumption.value = Number.isInteger(oldIndex) &&
+    oldIndex >= 0 && oldIndex < assumptions.length
+    ? String(oldIndex) : "0";
+  field("Assumption from Step 0", assumption);
+
+  const buttons = document.createElement("div");
+  buttons.style.marginTop = "14px";
+
+  const save = document.createElement("button");
+  save.type = "submit";
+  save.className = "green";
+  save.textContent = old ? "Save changes" : "Add load";
+
+  const cancel = document.createElement("button");
+  cancel.type = "button";
+  cancel.className = "grey";
+  cancel.textContent = "Cancel";
+  cancel.addEventListener("click", () => backdrop.remove());
+
+  buttons.append(save, cancel);
+  form.append(buttons);
+  backdrop.append(form);
+  document.body.append(backdrop);
+  id.focus();
+
+  form.addEventListener("submit", event => {
+    event.preventDefault();
+
+    const designation = id.value.trim();
+    if (!/^[A-Za-z0-9]{1,3}$/.test(designation)) {
+      alert("Use one to three letters or numbers.");
+      return;
     }
 
-    // ==========================================
-    //                 STEP 3
-    // ==========================================
-    $("refreshPlotBtn").addEventListener("click", drawStep3Plot);
+    const assumptionIndex = Number(assumption.value);
+    const updated = {
+      type,
+      target: target.value,
+      id: designation,
+      basis: basis.value,
+      assumptionIndex,
+      assumption:
+        assumptions[assumptionIndex]?.assumption?.trim() || "",
+      f_vals: old?.f_vals ? [...old.f_vals] : ["", "", ""],
+      m_vals: old?.m_vals ? [...old.m_vals] : ["", "", ""]
+    };
 
-    function refreshStep3UI() {
-      const mDiv = $("step3-masses"); const cDiv = $("step3-com"); const iDiv = $("step3-inertia");
-      mDiv.innerHTML = ""; cDiv.innerHTML = ""; iDiv.innerHTML = "";
+    if (editIndex === null) s.loads.push(updated);
+    else s.loads[editIndex] = updated;
 
-      const vehPts = progress.step0.points.filter(p => p.type === "vehicle-fixed").map(p => p.label);
-      const vehVecs = progress.step2.vectors.filter(v => v.type === "vehicle-fixed").map(v=>v.name);
-      while(vehVecs.length < 3) vehVecs.push("V_" + (vehVecs.length+1));
-      const vehRef = progress.step0.references.vehicle || "V";
-      const vf = progress.step0.frames.vehicle || "B";
+    invalidateStep5Check();
+    persist();
+    backdrop.remove();
+    refreshStep5();
+  });
+}
 
-      // 0th Moment (Masses)
-      vehPts.forEach(pt => {
-        const row = document.createElement("div"); row.style.marginBottom = "5px";
-        const lbl = document.createElement("span"); math(lbl, `m_{${pt}} = `);
-        const inp = document.createElement("input"); inp.style.width = "80px"; inp.style.marginLeft = "10px";
-        inp.value = progress.step3.masses[pt] || "";
-        inp.addEventListener("input", (e) => { progress.step3.masses[pt] = e.target.value; persist(); });
-        row.append(lbl, inp); mDiv.appendChild(row);
-      });
-      const tRow = document.createElement("div"); tRow.style.marginTop = "10px";
-      const tLbl = document.createElement("span"); math(tLbl, `M_{total} = `);
-      const tInp = document.createElement("input"); tInp.style.width = "80px"; tInp.style.marginLeft = "10px";
-      tInp.value = progress.step3.totalMass;
-      tInp.addEventListener("input", (e) => { progress.step3.totalMass = e.target.value; persist(); });
-      tRow.append(tLbl, tInp); mDiv.appendChild(tRow);
+$("addForceBtn").addEventListener("click",
+  () => makeStep5Dialog("force"));
+$("addTorqueBtn").addEventListener("click",
+  () => makeStep5Dialog("torque"));
 
-      // 1st Moment (COM)
-      createEqRow(cDiv, `\\vec{r}_{C/${vehRef}} =`, progress.step3.r_com, vehVecs, "#FA4616", persist);
-      vehPts.forEach(pt => {
-        if (!progress.step3.r_p_com[pt]) progress.step3.r_p_com[pt] = ["","",""];
-        createEqRow(cDiv, `\\vec{r}_{${pt}/C} =`, progress.step3.r_p_com[pt], vehVecs, "#FA4616", persist);
-      });
+function renderStep5Loads() {
+  const parent = $("s5-loads");
+  parent.replaceChildren();
 
-      // 2nd Moment (Inertia)
-      function createDyadic(parent, labelTex, dataArr, onChange) {
-        const row = document.createElement("div"); row.style.display = "flex"; row.style.marginBottom = "15px";
-        const lbl = document.createElement("div"); lbl.style.width = "100px"; math(lbl, labelTex); row.appendChild(lbl);
-        const mat = document.createElement("div");
-        for(let i=0; i<3; i++) {
-          const tr = document.createElement("div"); tr.style.display = "flex"; tr.style.marginBottom = "5px";
-          for(let j=0; j<3; j++) {
-            const inp = document.createElement("input"); inp.style.width = "40px"; inp.style.margin = "0 5px";
-            inp.value = dataArr[i][j] || "";
-            inp.addEventListener("input", (e) => { dataArr[i][j] = e.target.value; onChange(); });
-            tr.appendChild(inp);
-            const bLbl = document.createElement("div");
-            math(bLbl, `\\hat{${vehVecs[i]}}\\hat{${vehVecs[j]}}^\\top ${i<2||j<2 ? '+' : ''}`);
-            tr.appendChild(bLbl);
-          }
-          mat.appendChild(tr);
-        }
-        row.appendChild(mat); parent.appendChild(row);
-      }
+  const loads = ensureStep5Data().loads;
+  if (!loads.length) {
+    const hint = document.createElement("p");
+    hint.className = "hint";
+    hint.textContent =
+      "No forces or torques yet. Add one above the plot.";
+    parent.append(hint);
+    return;
+  }
 
-      vehPts.forEach(pt => {
-        if (!progress.step3.j_p[pt]) progress.step3.j_p[pt] = [["","",""],["","",""],["","",""]];
-        createDyadic(iDiv, `\\vec{J}_{${pt}/C} =`, progress.step3.j_p[pt], persist);
-      });
-      createDyadic(iDiv, `\\vec{J}_{\\tilde{${vf}}/C} =`, progress.step3.j_total, persist);
-    }
+  loads.forEach((load, index) => {
+    const card = document.createElement("div");
+    card.className = "card";
 
-    function drawStep3Plot() {
-      const traces = [];
-      const vehPts = progress.step0.points.filter(p => p.type === "vehicle-fixed").map(p => p.label);
-      
-      // Plot Points
-      const x=[], y=[], z=[], texts=[];
-      vehPts.forEach(pt => {
-        const coords = progress.step2.geomVals[pt];
-        if (coords) {
-          x.push(parseFloat(coords[0])||0); y.push(parseFloat(coords[1])||0); z.push(parseFloat(coords[2])||0);
-          texts.push(pt);
-        }
-      });
-      
-      traces.push({
-        x: x, y: y, z: z, mode: 'markers+text', text: texts, textposition: 'top right',
-        type: 'scatter3d', marker: { color: '#FA4616', size: 6 }
-      });
+    const header = document.createElement("div");
+    header.className = "card-header";
 
-      // Plot COM
-      const com = progress.step3.r_com.map(v => parseFloat(v));
-      if (!com.some(isNaN)) {
-        traces.push({
-          x: [com[0]], y: [com[1]], z: [com[2]], mode: 'markers+text', text: ['C'], textposition: 'top right',
-          type: 'scatter3d', marker: { color: 'black', size: 10, symbol: 'cross' }
-        });
-      }
+    const title = document.createElement("strong");
+    title.textContent =
+      `${load.type === "force" ? "Force" : "Torque"} ` +
+      `${load.id} at ${load.target} — ${load.basis} basis`;
+    title.style.color =
+      load.basis === "vehicle" ? ORANGE : BLUE;
 
-      // Plot Origin (*)
-      traces.push({
-        x: [0], y: [0], z: [0], mode: 'markers+text', text: ['*'], textposition: 'bottom center',
-        type: 'scatter3d', marker: { color: '#003087', size: 8 }
-      });
+    const controls = document.createElement("div");
 
-      // Plot Axes Lines
-      const scale = Math.max(1, ...x.map(Math.abs), ...y.map(Math.abs), ...z.map(Math.abs)) * 0.7;
-      const vehVecs = progress.step2.vectors.filter(v => v.type === "vehicle-fixed").map(v=>v.name);
-      while(vehVecs.length < 3) vehVecs.push("V_" + (vehVecs.length+1));
-      const colors = ["#c62828", "#2e7d32", "#ad7800"];
-      
-      for(let i=0; i<3; i++) {
-        const dx = i===0?scale:0; const dy = i===1?scale:0; const dz = i===2?scale:0;
-        traces.push({
-          x: [0, dx], y: [0, dy], z: [0, dz], mode: 'lines+text', text: ['', vehVecs[i]], textposition: 'top center',
-          type: 'scatter3d', line: { color: colors[i], width: 5 }
-        });
-      }
+    const edit = document.createElement("button");
+    edit.className = "small grey";
+    edit.textContent = "Edit";
+    edit.addEventListener("click",
+      () => makeStep5Dialog(load.type, index));
 
-      const layout = { margin: { l: 0, r: 0, b: 0, t: 0 }, showlegend: false, scene: { aspectmode: 'data' }};
-      Plotly.newPlot('step3Plot', traces, layout);
-    }
-
-
-    // --- Save & Export ---
-    $("saveProgress").addEventListener("click", () => { persist(); status("Progress saved in this browser."); });
-    
-    $("exportProgress").addEventListener("click", () => {
+    const remove = document.createElement("button");
+    remove.className = "small red";
+    remove.textContent = "Delete";
+    remove.addEventListener("click", () => {
+      if (!confirm("Delete this load?")) return;
+      loads.splice(index, 1);
+      invalidateStep5Check();
       persist();
-      const blob = new Blob([JSON.stringify(progress, null, 2)], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url; link.download = `${currentProblemId}_progress.json`; link.click();
-      URL.revokeObjectURL(url);
+      refreshStep5();
     });
 
-    $("importProgress").addEventListener("change", async (event) => {
-      const file = event.target.files[0];
-      if (!file) return;
-      try {
-        const imported = JSON.parse(await file.text());
-        if (!imported.step0 || !imported.step1) throw new Error("Invalid format.");
-        
-        placement = null; selectedLabel = null; vecPlacement = null; selectedVecIndex = null;
-        $("cancelPlacement").hidden = true;
-        
-        progress = imported;
-        if(!progress.step2) progress.step2 = emptyProgress().step2; // Fallback for older saves
-        
+    controls.append(edit, remove);
+    header.append(title, controls);
+    card.append(header);
+
+    const assumption = document.createElement("p");
+    assumption.textContent =
+      `Assumption: ${load.assumption || "(none)"}`;
+    card.append(assumption);
+
+    const names = basisNames(
+      load.basis === "vehicle"
+        ? "vehicle-fixed" : "inertial-fixed"
+    );
+    const color =
+      load.basis === "vehicle" ? ORANGE : BLUE;
+
+    if (!Array.isArray(load.f_vals)) load.f_vals = ["", "", ""];
+    if (!Array.isArray(load.m_vals)) load.m_vals = ["", "", ""];
+
+    if (load.type === "force") {
+      buildEqRow(
+        card,
+        `\\vec{F}_{${load.id}/${load.target}}=`,
+        load.f_vals, names, color,
+        () => {
+          invalidateStep5Check();
+          persist();
+        }
+      );
+
+      buildEqRow(
+        card,
+        `\\vec{M}_{${load.id}/C}=`,
+        load.m_vals, names, color,
+        () => {
+          invalidateStep5Check();
+          persist();
+        }
+      );
+    } else {
+      buildEqRow(
+        card,
+        `\\vec{M}_{${load.id}/${load.target}}=`,
+        load.m_vals, names, color,
+        () => {
+          invalidateStep5Check();
+          persist();
+        }
+      );
+    }
+
+    parent.append(card);
+  });
+}
+
+function renderStep5Totals() {
+  const parent = $("s5-totals");
+  parent.replaceChildren();
+
+  const s = ensureStep5Data();
+  const names = basisNames(
+    s.totBasis === "vehicle"
+      ? "vehicle-fixed" : "inertial-fixed"
+  );
+  const color = s.totBasis === "vehicle" ? ORANGE : BLUE;
+
+  buildEqRow(parent, "\\sum\\vec{F}=", s.totF,
+    names, color, () => {
+      invalidateStep5Check();
+      persist();
+    });
+
+  buildEqRow(parent, "\\sum\\vec{M}_C=", s.totM,
+    names, color, () => {
+      invalidateStep5Check();
+      persist();
+    });
+}
+
+$("s5-totBasis").addEventListener("change", event => {
+  const s = ensureStep5Data();
+  if (event.target.value === s.totBasis) return;
+
+  s.totBasis = event.target.value;
+  s.totF = ["", "", ""];
+  s.totM = ["", "", ""];
+  invalidateStep5Check();
+  persist();
+  renderStep5Totals();
+  setStep5Message(
+    "Basis changed. Re-enter the totals in the selected basis."
+  );
+});
+
+$("s5-angleVal").addEventListener("input", event => {
+  ensureStep5Data().angleVal = event.target.value;
+  persist();
+});
+
+$("refreshPlot5Btn").addEventListener("click", drawStep5Plot);
+
+// ── Plot: reuse Step 3 geometry, plus loads ──────────────
+
+function strictNumber(value) {
+  const text = String(value ?? "").trim();
+  if (!text) return NaN;
+  const result = Number(text);
+  return Number.isFinite(result) ? result : NaN;
+}
+
+function strictVector(values) {
+  if (!Array.isArray(values) || values.length !== 3) return null;
+  const numbers = values.map(strictNumber);
+  return numbers.every(Number.isFinite) ? numbers : null;
+}
+
+function step5AngleName() {
+  const theta = progress.step2.eqVals?.theta || [];
+  if (!Array.isArray(theta) || theta.length !== 3) return null;
+
+  const active = theta.map(value => String(value).trim())
+    .filter(value => value !== "0" && value !== "0.0");
+
+  return active.length === 1 &&
+    /^[A-Za-z][A-Za-z0-9_]*$/.test(active[0])
+    ? active[0] : null;
+}
+
+function evaluatePlotExpression(expression, substitutions = {}) {
+  const text = String(expression ?? "").trim();
+  if (!text || text.length > 120 || !window.nerdamer) return NaN;
+
+  // Plot preview only: allow the angle variable, pi, arithmetic
+  // and sin/cos. Never evaluate JavaScript from the input.
+  const angleName = step5AngleName();
+  const identifiers = text.match(/[A-Za-z][A-Za-z0-9_]*/g) || [];
+  if (identifiers.some(name =>
+    !["sin", "cos", "pi", angleName].includes(name)
+  )) return NaN;
+
+  if (!/^[\w\s+\-*/^().,]+$/.test(text)) return NaN;
+
+  try {
+    const value = nerdamer(text, substitutions)
+      .evaluate().text("decimals");
+    return strictNumber(value);
+  } catch {
+    return NaN;
+  }
+}
+
+function previewRotation() {
+  const q = step5AngleName();
+  const angle = strictNumber(ensureStep5Data().angleVal);
+
+  if (!Number.isFinite(angle)) return null;
+  const substitution = q ? { [q]: angle } : {};
+
+  const R = progress.step2.rotVals;
+  if (!Array.isArray(R) || R.length !== 3) return null;
+
+  const evaluated = R.map(row =>
+    Array.isArray(row) && row.length === 3
+      ? row.map(value =>
+          evaluatePlotExpression(value, substitution)
+        )
+      : []
+  );
+
+  return evaluated.every(row =>
+    row.length === 3 && row.every(Number.isFinite)
+  ) ? evaluated : null;
+}
+
+function plotPosition(target) {
+  if (target === "C") {
+    return strictVector(progress.step3.r_com);
+  }
+  if (target === progress.step0.references.vehicle) {
+    return [0, 0, 0];
+  }
+  return strictVector(progress.step2.geomVals?.[target]);
+}
+
+function addLineTrace(traces, start, end, color, label = "") {
+  traces.push({
+    type: "scatter3d",
+    mode: label ? "lines+text" : "lines",
+    x: [start[0], end[0]],
+    y: [start[1], end[1]],
+    z: [start[2], end[2]],
+    text: ["", label],
+    textposition: "top center",
+    line: { color, width: 7 },
+    showlegend: false
+  });
+}
+
+function drawStep5Plot() {
+  if (!window.Plotly) {
+    $("plot5").textContent = "Plotly did not load.";
+    return;
+  }
+
+  const traces = [];
+  const points = progress.step0.points
+    .filter(point => point.type === "vehicle-fixed");
+
+  const positions = [];
+  for (const point of points) {
+    const coords = plotPosition(point.label);
+    if (coords) positions.push({ label: point.label, coords });
+  }
+
+  if (positions.length) {
+    traces.push({
+      type: "scatter3d",
+      mode: "markers+text",
+      x: positions.map(item => item.coords[0]),
+      y: positions.map(item => item.coords[1]),
+      z: positions.map(item => item.coords[2]),
+      text: positions.map(item => item.label),
+      textposition: "top right",
+      marker: { color: ORANGE, size: 7 },
+      showlegend: false
+    });
+  }
+
+  const C = plotPosition("C");
+  if (C) {
+    traces.push({
+      type: "scatter3d",
+      mode: "markers+text",
+      x: [C[0]], y: [C[1]], z: [C[2]],
+      text: ["⊕ C"],
+      marker: { color: "black", size: 11, symbol: "cross" },
+      showlegend: false
+    });
+  }
+
+  const originLabel =
+    progress.step0.references.vehicle || "Vehicle reference";
+  traces.push({
+    type: "scatter3d",
+    mode: "markers+text",
+    x: [0], y: [0], z: [0],
+    text: [originLabel],
+    marker: { color: BLUE, size: 8 },
+    showlegend: false
+  });
+
+  const coordinates = positions.map(item => item.coords);
+  if (C) coordinates.push(C);
+  const extent = Math.max(
+    1, ...coordinates.flat().map(value => Math.abs(value))
+  );
+  const axisLength = extent * 0.65;
+  const vehicleNames = basisNames("vehicle-fixed");
+
+  for (let axis = 0; axis < 3; axis++) {
+    const tip = [0, 0, 0];
+    tip[axis] = axisLength;
+    addLineTrace(
+      traces, [0, 0, 0], tip,
+      ["#c62828", "#2e7d32", "#ad7800"][axis],
+      vehicleNames[axis]
+    );
+  }
+
+  const R = previewRotation();
+  const angleName = step5AngleName();
+  const angle = strictNumber(ensureStep5Data().angleVal);
+  const substitution = angleName && Number.isFinite(angle)
+    ? { [angleName]: angle } : {};
+
+  let omitted = 0;
+
+  for (const load of ensureStep5Data().loads) {
+    const point = plotPosition(load.target);
+    if (!point) {
+      omitted++;
+      continue;
+    }
+
+    const color =
+      load.basis === "vehicle" ? ORANGE : BLUE;
+
+    if (load.type === "force") {
+      let direction = (load.f_vals || []).map(value =>
+        evaluatePlotExpression(value, substitution)
+      );
+      if (
+        direction.length !== 3 ||
+        !direction.every(Number.isFinite)
+      ) {
+        omitted++;
+        continue;
+      }
+
+      if (load.basis === "inertial") {
+        if (!R) {
+          omitted++;
+          continue;
+        }
+        // Vehicle components = R × inertial components.
+        direction = matVec(R, direction);
+      }
+
+      const norm = Math.hypot(...direction);
+      if (!(norm > 1e-12)) continue;
+
+      const tip = point.map((value, i) =>
+        value + direction[i] * extent * 0.48 / norm
+      );
+
+      addLineTrace(traces, point, tip, color, load.id);
+
+      const delta = tip.map((value, i) => value - point[i]);
+      traces.push({
+        type: "cone",
+        x: [tip[0]], y: [tip[1]], z: [tip[2]],
+        u: [delta[0]], v: [delta[1]], w: [delta[2]],
+        anchor: "tip",
+        sizemode: "absolute",
+        sizeref: extent * 0.16,
+        colorscale: [[0, color], [1, color]],
+        showscale: false,
+        showlegend: false
+      });
+    } else {
+      // Schematic curved arrow around the chosen point.
+      // Its displayed plane does not imply a torque direction.
+      const radius = extent * 0.16;
+      const angles = Array.from({ length: 30 }, (_, i) =>
+        i * 1.8 * Math.PI / 29
+      );
+      traces.push({
+        type: "scatter3d",
+        mode: "lines+text",
+        x: angles.map(t => point[0] + radius * Math.cos(t)),
+        y: angles.map(t => point[1] + radius * Math.sin(t)),
+        z: angles.map(() => point[2]),
+        text: angles.map((_, i) =>
+          i === angles.length - 1 ? `↻ ${load.id}` : ""
+        ),
+        line: { color, width: 6 },
+        showlegend: false
+      });
+    }
+  }
+
+  const layout = {
+    margin: { l: 0, r: 0, b: 0, t: 0 },
+    showlegend: false,
+    scene: {
+      aspectmode: "data",
+      xaxis: { title: vehicleNames[0] },
+      yaxis: { title: vehicleNames[1] },
+      zaxis: { title: vehicleNames[2] }
+    }
+  };
+
+  Plotly.react("plot5", traces, layout, { responsive: true });
+
+  const note = omitted
+    ? `${omitted} load annotation(s) not drawn: enter plot-ready ` +
+      "components, geometry, and a rotation/preview angle."
+    : "Orange loads use vehicle components; blue loads use inertial components.";
+  setSaveStatus(note);
+}
+
+// ── Symbolic totals check via Pyodide/SymPy ──────────────
+
+const TOTALS_CHECK_PY = String.raw`
+import ast
+import json
+import math
+import re
+import sympy as sp
+
+data = json.loads(totals_check_input)
+
+class InputError(ValueError):
+    pass
+
+def expression(value):
+    text = str(value).strip().replace("^", "**")
+    text = text.replace(r"\sin", "sin").replace(r"\cos", "cos")
+    text = text.replace(r"\pi", "pi")
+    if not text or len(text) > 300:
+        raise InputError("A component is blank or too long.")
+    try:
+        root = ast.parse(text, mode="eval")
+    except SyntaxError:
+        raise InputError("Cannot parse a component.")
+    if sum(1 for _ in ast.walk(root)) > 80:
+        raise InputError("Expression is too complex.")
+
+    def walk(node):
+        if isinstance(node, ast.Constant):
+            if type(node.value) in (int, float):
+                return sp.sympify(node.value)
+            raise InputError("Only numeric constants are allowed.")
+        if isinstance(node, ast.Name):
+            if node.id == "pi":
+                return sp.pi
+            if node.id.startswith("__") or len(node.id) > 40:
+                raise InputError("Invalid variable name.")
+            return sp.Symbol(node.id, real=True)
+        if isinstance(node, ast.UnaryOp):
+            x = walk(node.operand)
+            if isinstance(node.op, ast.UAdd):
+                return x
+            if isinstance(node.op, ast.USub):
+                return -x
+        if isinstance(node, ast.BinOp):
+            a, b = walk(node.left), walk(node.right)
+            if isinstance(node.op, ast.Add):
+                return a + b
+            if isinstance(node.op, ast.Sub):
+                return a - b
+            if isinstance(node.op, ast.Mult):
+                return a * b
+            if isinstance(node.op, ast.Div):
+                return a / b
+            if isinstance(node.op, ast.Pow):
+                if not b.is_number or b.free_symbols:
+                    raise InputError("Powers must be numeric.")
+                n = float(b)
+                if not math.isfinite(n) or abs(n) > 8:
+                    raise InputError("Power is too large.")
+                return a ** b
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and len(node.args) == 1
+            and not node.keywords
+        ):
+            x = walk(node.args[0])
+            if node.func.id == "sin":
+                return sp.sin(x)
+            if node.func.id == "cos":
+                return sp.cos(x)
+        raise InputError("Use arithmetic, sin(), cos(), and variables.")
+    return walk(root.body)
+
+def vector(values):
+    if not isinstance(values, list) or len(values) != 3:
+        raise InputError("Each vector needs three components.")
+    return sp.Matrix([expression(x) for x in values])
+
+def rotation(values):
+    if not isinstance(values, list) or len(values) != 3 or any(
+        not isinstance(row, list) or len(row) != 3
+        for row in values
+    ):
+        raise InputError("Rotation requires nine coefficients.")
+    return sp.Matrix([[expression(x) for x in row] for row in values])
+
+def equal(a, b):
+    diff = sp.trigsimp(sp.simplify(a - b))
+    return diff == 0 or diff.is_zero is True
+
+def compare(a, b):
+    if equal(a, b):
+        return "exact"
+    symbols = sorted((a - b).free_symbols, key=lambda s: s.name)
+    for base in (-1.31, -0.47, 0.37, 0.94, 1.73, 2.36):
+        sub = {
+            symbol: base + i * 0.29
+            for i, symbol in enumerate(symbols)
+        }
+        try:
+            av = complex(sp.N(a.subs(sub)))
+            bv = complex(sp.N(b.subs(sub)))
+        except (TypeError, ValueError, ZeroDivisionError, OverflowError):
+            return "different"
+        if not all(math.isfinite(x) for x in
+                   (av.real, av.imag, bv.real, bv.imag)):
+            return "different"
+        if abs(av.imag) > 1e-9 or abs(bv.imag) > 1e-9:
+            return "different"
+        if not math.isclose(av.real, bv.real,
+                            rel_tol=1e-3, abs_tol=1e-5):
+            return "different"
+    return "rounded"
+
+try:
+    loads = data["loads"]
+    if not isinstance(loads, list) or not loads:
+        raise InputError("Add at least one load.")
+
+    basis = data["totBasis"]
+    if basis not in ("vehicle", "inertial"):
+        raise InputError("Choose a totals basis.")
+
+    mixed = any(load["basis"] != basis for load in loads)
+    R = None
+
+    if mixed:
+        theta = data["theta"]
+        if not isinstance(theta, list) or len(theta) != 3:
+            raise InputError("Step 2 orientation is incomplete.")
+
+        active = [
+            str(x).strip() for x in theta
+            if str(x).strip() not in ("0", "0.0")
+        ]
+        if len(active) != 1 or not re.fullmatch(
+            r"[A-Za-z][A-Za-z0-9_]*", active[0]
+        ):
+            raise InputError(
+                "Step 2 orientation needs one angle variable and two zeros."
+            )
+
+        R = rotation(data["rotation"])
+        residual = R * R.T - sp.eye(3)
+        if not all(equal(residual[i, j], 0)
+                   for i in range(3) for j in range(3)):
+            raise InputError("Step 2 rotation is not confirmed orthogonal.")
+        if not equal(R.det(), 1):
+            raise InputError("Step 2 rotation determinant is not +1.")
+
+    forces = sp.zeros(3, 1)
+    moments = sp.zeros(3, 1)
+
+    for load in loads:
+        if load.get("basis") not in ("vehicle", "inertial"):
+            raise InputError("A load has an unknown basis.")
+
+        F = (
+            vector(load["f_vals"])
+            if load.get("type") == "force"
+            else sp.zeros(3, 1)
+        )
+        M = vector(load["m_vals"])
+
+        if load["basis"] != basis:
+            conversion = R if basis == "vehicle" else R.T
+            F = conversion * F
+            M = conversion * M
+
+        forces += F
+        moments += M
+
+    student_F = vector(data["totF"])
+    student_M = vector(data["totM"])
+
+    force_results = [
+        compare(student_F[i], forces[i]) for i in range(3)
+    ]
+    moment_results = [
+        compare(student_M[i], moments[i]) for i in range(3)
+    ]
+    output = {
+        "status": "ok",
+        "force": force_results,
+        "moment": moment_results
+    }
+
+except (InputError, KeyError, TypeError, ValueError,
+        ZeroDivisionError) as error:
+    output = {"status": "unverified", "message": str(error)}
+
+json.dumps(output)
+`;
+
+async function checkStep5Totals() {
+  if (!checksEnabled()) return;
+
+  const s = ensureStep5Data();
+  const button = $("checkTotalsBtn");
+  button.disabled = true;
+  setStep5Message("Loading or running symbolic check…");
+
+  const snapshot = step5Snapshot();
+
+  try {
+    const engine = await ensurePyodide();
+    const input = {
+      loads: s.loads,
+      totBasis: s.totBasis,
+      totF: s.totF,
+      totM: s.totM,
+      theta: progress.step2.eqVals?.theta,
+      rotation: progress.step2.rotVals
+    };
+
+    engine.globals.set(
+      "totals_check_input",
+      JSON.stringify(input)
+    );
+
+    let result;
+    try {
+      result = JSON.parse(
+        await engine.runPythonAsync(TOTALS_CHECK_PY)
+      );
+    } finally {
+      engine.globals.delete("totals_check_input");
+    }
+
+    // A check only applies to the inputs that were submitted.
+    if (step5Snapshot() !== snapshot) {
+      setStep5Message(
+        "Inputs changed during checking; check again.",
+        "#ad7800"
+      );
+      return;
+    }
+
+    if (result.status !== "ok") {
+      s.check_result = {
+        status: "unverified",
+        reason: result.message,
+        snapshot
+      };
+      setStep5Message(
+        `Could not verify: ${result.message}`,
+        "#ad7800"
+      );
+    } else {
+      const outcomes = [...result.force, ...result.moment];
+      const exact = outcomes.every(item => item === "exact");
+      const acceptable = outcomes.every(item =>
+        item === "exact" || item === "rounded"
+      );
+
+      s.check_result = {
+        status: exact
+          ? "correct"
+          : acceptable
+            ? "within_rounding_tolerance"
+            : "unverified",
+        force: result.force,
+        moment: result.moment,
+        snapshot
+      };
+
+      if (exact) {
+        setStep5Message(
+          "Force and moment totals are symbolically consistent.",
+          "#2e7d32"
+        );
+      } else if (acceptable) {
+        setStep5Message(
+          "Totals agree at tested values within rounding tolerance; " +
+          "this is not an exact symbolic proof.",
+          "#ad7800"
+        );
+      } else {
+        const fields = [
+          ...result.force.map((value, i) =>
+            value === "different" ? `force ${i + 1}` : null
+          ),
+          ...result.moment.map((value, i) =>
+            value === "different" ? `moment ${i + 1}` : null
+          )
+        ].filter(Boolean);
+
+        setStep5Message(
+          `Revisit ${fields.join(", ")}.`,
+          "#b71c1c"
+        );
+      }
+    }
+
+    persist();
+  } catch (error) {
+    s.check_result = {
+      status: "unverified",
+      reason: String(error.message || error),
+      snapshot
+    };
+    persist();
+    setStep5Message(
+      `Symbolic engine unavailable: ${error.message}`,
+      "#b71c1c"
+    );
+  } finally {
+    button.disabled = !checksEnabled();
+  }
+}
+
+$("checkTotalsBtn").addEventListener(
+  "click", checkStep5Totals
+);
+
+// ═══════════════════════════════════════════════════════════
+// END OF CHUNK 7 — paste Chunk 8 after this script
+// ═══════════════════════════════════════════════════════════
+</script>
+
+<script>
+"use strict";
+
+// ═══════════════════════════════════════════════════════════
+// CHUNK 8 — Step 6: equations of motion and startup
+// ═══════════════════════════════════════════════════════════
+
+const EOM_GROUPS = ["r", "theta", "v", "omega"];
+
+function ensureStep6Data() {
+  if (!progress.step6) {
+    progress.step6 = { answers: {}, results: {} };
+  }
+  if (!progress.step6.answers ||
+      typeof progress.step6.answers !== "object") {
+    progress.step6.answers = {};
+  }
+  if (!progress.step6.results ||
+      typeof progress.step6.results !== "object") {
+    progress.step6.results = {};
+  }
+  return progress.step6;
+}
+
+function activeEOMRows() {
+  const rows = [];
+
+  for (const group of EOM_GROUPS) {
+    const components = progress.step2.eqVals?.[group] || [];
+
+    for (let index = 0; index < 3; index++) {
+      const name = String(components[index] ?? "").trim();
+
+      // A state is one variable name, not 0 or an expression.
+      if (/^[A-Za-z][A-Za-z0-9_]*$/.test(name) &&
+          !["sin", "cos", "pi"].includes(name)) {
+        rows.push({
+          group,
+          index,
+          name,
+          key: `${group}:${index}`
+        });
+      }
+    }
+  }
+
+  return rows;
+}
+
+function eomSourceSnapshot() {
+  const s5 = ensureStep5Data();
+
+  return JSON.stringify({
+    step2: {
+      eqVals: progress.step2.eqVals,
+      rotVals: progress.step2.rotVals
+    },
+    step3: {
+      totalMass: progress.step3.totalMass,
+      j_total: progress.step3.j_total
+    },
+    step5: {
+      loads: s5.loads,
+      totBasis: s5.totBasis,
+      totF: s5.totF,
+      totM: s5.totM,
+      check_result: s5.check_result
+    }
+  });
+}
+
+function setEOMFeedback(row, text, color = BLUE) {
+  let feedback = row.querySelector(".eom-feedback");
+
+  if (!feedback) {
+    feedback = document.createElement("span");
+    feedback.className = "eom-feedback";
+    feedback.style.marginLeft = "8px";
+    row.append(feedback);
+  }
+
+  feedback.textContent = text;
+  feedback.style.color = color;
+}
+
+function refreshStep6() {
+  const s6 = ensureStep6Data();
+  const parent = $("s6-eom");
+  parent.replaceChildren();
+
+  const rows = activeEOMRows();
+  const names = rows.map(row => row.name);
+
+  if (names.length !== new Set(names).size) {
+    const warning = document.createElement("p");
+    warning.className = "status-bar";
+    warning.style.color = "#b71c1c";
+    warning.textContent =
+      "Active state variables must have distinct names in Step 2.";
+    parent.append(warning);
+  }
+
+  if (!rows.length) {
+    const message = document.createElement("p");
+    message.className = "hint";
+    message.textContent =
+      "No active state variables found. Enter variable names " +
+      "in Step 2 and return here.";
+    parent.append(message);
+    return;
+  }
+
+  const headings = {
+    r: "Position derivatives",
+    theta: "Single-axis orientation derivatives",
+    v: "Linear acceleration",
+    omega: "Angular acceleration"
+  };
+
+  for (const group of EOM_GROUPS) {
+    const groupRows = rows.filter(row => row.group === group);
+    if (!groupRows.length) continue;
+
+    const heading = document.createElement("h3");
+    heading.textContent = headings[group];
+    parent.append(heading);
+
+    for (const item of groupRows) {
+      const row = document.createElement("div");
+      row.className = "eq-row";
+      row.dataset.eomKey = item.key;
+
+      const lhs = document.createElement("span");
+      lhs.className = "eq-lhs";
+      renderMath(lhs, `\\dot{${item.name}}=`);
+      row.append(lhs);
+
+      const answer = document.createElement("input");
+      answer.type = "text";
+      answer.style.flex = "1";
+      answer.style.minWidth = "260px";
+      answer.value = s6.answers[item.key] || "";
+      answer.setAttribute(
+        "aria-label",
+        `Right-hand side for derivative of ${item.name}`
+      );
+
+      answer.addEventListener("input", () => {
+        s6.answers[item.key] = answer.value;
+        delete s6.results[item.key];
+        setEOMFeedback(row, "");
         persist();
-        refreshStep0UI();
-        refreshStep1UI();
-        refreshStep2UI();
-        draw();
-        drawStep2();
-        status("Progress imported.");
-      } catch { status("Could not import that JSON file."); }
-      event.target.value = "";
-    });
+      });
+      row.append(answer);
 
-    // Start
-    loadProblemList();
-  </script>
+      const check = document.createElement("button");
+      check.type = "button";
+      check.className = "green small eom-check-btn";
+      check.textContent = "Check";
+      check.disabled = !checksEnabled();
+
+      check.addEventListener("click", async () => {
+        check.disabled = true;
+        setEOMFeedback(row, "Checking…");
+
+        try {
+          const results = await checkEOMRows([item]);
+
+          if (results?.changed) {
+            setEOMFeedback(
+              row, "Inputs changed; check again.", "#ad7800"
+            );
+          } else {
+            displayEOMResult(
+              row, results[item.key] || {
+                status: "unverified",
+                message: "No result returned."
+              }
+            );
+          }
+        } catch (error) {
+          setEOMFeedback(
+            row,
+            `Could not check: ${error.message}`,
+            "#b71c1c"
+          );
+        } finally {
+          check.disabled = !checksEnabled();
+        }
+      });
+
+      row.append(check);
+      parent.append(row);
+    }
+  }
+
+  applyChecksEnabled();
+}
+
+function displayEOMResult(row, result) {
+  const status = result.status;
+
+  if (status === "exact") {
+    setEOMFeedback(row, "Symbolically equivalent.", "#2e7d32");
+  } else if (status === "rounded") {
+    setEOMFeedback(
+      row,
+      "Consistent within rounding tolerance; not a proof.",
+      "#ad7800"
+    );
+  } else if (status === "different") {
+    setEOMFeedback(
+      row,
+      "This right-hand side does not match.",
+      "#b71c1c"
+    );
+  } else {
+    setEOMFeedback(
+      row,
+      result.message || "Could not verify.",
+      "#ad7800"
+    );
+  }
+}
+
+// The Python below runs locally in the student's browser.
+// No expected expression is returned to JavaScript or exported,
+// although a technically capable student can still inspect
+// browser-side calculations.
+const EOM_CHECK_PY = String.raw`
+import ast
+import json
+import math
+import re
+import sympy as sp
+
+data = json.loads(eom_check_input)
+
+class InputError(ValueError):
+    pass
+
+def expression(value):
+    text = str(value).strip().replace("^", "**")
+    text = text.replace(r"\sin", "sin").replace(r"\cos", "cos")
+    text = text.replace(r"\pi", "pi")
+
+    if not text or len(text) > 300:
+        raise InputError("A required component is blank or too long.")
+
+    try:
+        root = ast.parse(text, mode="eval")
+    except SyntaxError:
+        raise InputError("An expression could not be parsed.")
+
+    if sum(1 for _ in ast.walk(root)) > 80:
+        raise InputError("An expression is too complex.")
+
+    def walk(node):
+        if isinstance(node, ast.Constant):
+            if type(node.value) in (int, float):
+                return sp.sympify(node.value)
+            raise InputError("Only numeric constants are allowed.")
+
+        if isinstance(node, ast.Name):
+            if node.id == "pi":
+                return sp.pi
+            if node.id.startswith("__") or len(node.id) > 40:
+                raise InputError("Invalid variable name.")
+            return sp.Symbol(node.id, real=True)
+
+        if isinstance(node, ast.UnaryOp):
+            value = walk(node.operand)
+            if isinstance(node.op, ast.UAdd):
+                return value
+            if isinstance(node.op, ast.USub):
+                return -value
+
+        if isinstance(node, ast.BinOp):
+            left = walk(node.left)
+            right = walk(node.right)
+
+            if isinstance(node.op, ast.Add):
+                return left + right
+            if isinstance(node.op, ast.Sub):
+                return left - right
+            if isinstance(node.op, ast.Mult):
+                return left * right
+            if isinstance(node.op, ast.Div):
+                return left / right
+            if isinstance(node.op, ast.Pow):
+                if not right.is_number or right.free_symbols:
+                    raise InputError("Powers must be numeric.")
+                exponent = float(right)
+                if not math.isfinite(exponent) or abs(exponent) > 8:
+                    raise InputError("Power is too large.")
+                return left ** right
+
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and len(node.args) == 1
+            and not node.keywords
+        ):
+            argument = walk(node.args[0])
+            if node.func.id == "sin":
+                return sp.sin(argument)
+            if node.func.id == "cos":
+                return sp.cos(argument)
+
+        raise InputError(
+            "Use numbers, variables, arithmetic, sin(), and cos()."
+        )
+
+    return walk(root.body)
+
+def vector(values, description):
+    if not isinstance(values, list) or len(values) != 3:
+        raise InputError(description + " needs three components.")
+    return sp.Matrix([expression(value) for value in values])
+
+def matrix(values, description):
+    if (
+        not isinstance(values, list)
+        or len(values) != 3
+        or any(not isinstance(row, list) or len(row) != 3
+               for row in values)
+    ):
+        raise InputError(description + " needs nine coefficients.")
+    return sp.Matrix([
+        [expression(value) for value in row]
+        for row in values
+    ])
+
+def exact(left, right):
+    difference = sp.trigsimp(sp.simplify(left - right))
+    return difference == 0 or difference.is_zero is True
+
+def compare(left, right):
+    if exact(left, right):
+        return "exact"
+
+    symbols = sorted((left - right).free_symbols, key=lambda s: s.name)
+
+    for base in (-1.31, -0.47, 0.37, 0.94, 1.73, 2.36):
+        substitutions = {
+            symbol: base + 0.29 * index
+            for index, symbol in enumerate(symbols)
+        }
+
+        try:
+            actual = complex(sp.N(left.subs(substitutions)))
+            expected = complex(sp.N(right.subs(substitutions)))
+        except (TypeError, ValueError, ZeroDivisionError, OverflowError):
+            return "different"
+
+        values = (
+            actual.real, actual.imag,
+            expected.real, expected.imag
+        )
+        if not all(math.isfinite(value) for value in values):
+            return "different"
+        if abs(actual.imag) > 1e-9 or abs(expected.imag) > 1e-9:
+            return "different"
+
+        if not math.isclose(
+            actual.real, expected.real,
+            rel_tol=1e-3, abs_tol=1e-5
+        ):
+            return "different"
+
+    return "rounded"
+
+def valid_rotation(rotation):
+    residual = rotation * rotation.T - sp.eye(3)
+    return (
+        all(exact(residual[i, j], 0)
+            for i in range(3) for j in range(3))
+        and exact(rotation.det(), 1)
+    )
+
+def checked_totals_are_current():
+    step5 = data["step5"]
+    check = step5.get("check_result")
+
+    if not isinstance(check, dict) or check.get("status") != "correct":
+        return False
+
+    # The Step 5 browser check saves this string snapshot.
+    snapshot = check.get("snapshot")
+    return (
+        isinstance(snapshot, str)
+        and snapshot == data.get("step5_snapshot")
+    )
+
+def active_state_names():
+    eq = data["step2"]["eqVals"]
+    names = []
+
+    for group in ("r", "theta", "v", "omega"):
+        components = eq.get(group, [])
+        for component in components:
+            name = str(component).strip()
+            if re.fullmatch(r"[A-Za-z][A-Za-z0-9_]*", name):
+                names.append(name)
+
+    return names
+
+def expected_for_group(group):
+    step2 = data["step2"]
+    eq = step2["eqVals"]
+
+    if group == "r":
+        return vector(eq["v"], "Step 2 velocity")
+
+    if group == "theta":
+        # Single-axis assumption from the course.
+        return vector(eq["omega"], "Step 2 angular velocity")
+
+    if not checked_totals_are_current():
+        raise InputError(
+            "Check the Step 5 force and moment totals first, "
+            "then return to Step 6."
+        )
+
+    rotation = matrix(step2["rotVals"], "Step 2 rotation")
+    if not valid_rotation(rotation):
+        raise InputError(
+            "The Step 2 rotation could not be confirmed valid."
+        )
+
+    step3 = data["step3"]
+    step5 = data["step5"]
+    basis = step5.get("totBasis")
+    if basis not in ("vehicle", "inertial"):
+        raise InputError("Choose a totals basis in Step 5.")
+
+    if group == "v":
+        mass = expression(step3.get("totalMass", ""))
+        if exact(mass, 0):
+            raise InputError("Total mass cannot be zero.")
+
+        force = vector(step5["totF"], "Step 5 total force")
+
+        # R maps inertial components to vehicle components.
+        force_inertial = (
+            force if basis == "inertial" else rotation.T * force
+        )
+        return force_inertial / mass
+
+    if group == "omega":
+        inertia = matrix(
+            step3["j_total"], "Step 3 total inertia"
+        )
+        if exact(inertia.det(), 0):
+            raise InputError(
+                "The inertia tensor is singular; its inverse "
+                "is undefined."
+            )
+
+        omega_inertial = vector(
+            eq["omega"], "Step 2 angular velocity"
+        )
+        total_moment = vector(
+            step5["totM"], "Step 5 total moment"
+        )
+
+        omega_vehicle = rotation * omega_inertial
+        moment_vehicle = (
+            total_moment
+            if basis == "vehicle"
+            else rotation * total_moment
+        )
+
+        acceleration_vehicle = inertia.inv() * (
+            moment_vehicle
+            - omega_vehicle.cross(inertia * omega_vehicle)
+        )
+        return rotation.T * acceleration_vehicle
+
+    raise InputError("Unknown equation group.")
+
+output = {}
+
+try:
+    names = active_state_names()
+    if len(names) != len(set(names)):
+        raise InputError(
+            "Step 2 state-variable names must be distinct."
+        )
+
+    for requested in data["rows"]:
+        key = requested["key"]
+        group = requested["group"]
+        index = int(requested["index"])
+
+        try:
+            if group not in ("r", "theta", "v", "omega"):
+                raise InputError("Unknown equation group.")
+            if index not in (0, 1, 2):
+                raise InputError("Invalid component index.")
+
+            state_name = str(
+                data["step2"]["eqVals"][group][index]
+            ).strip()
+
+            if not re.fullmatch(
+                r"[A-Za-z][A-Za-z0-9_]*",
+                state_name
+            ):
+                raise InputError(
+                    "This component is not an active state."
+                )
+
+            student = expression(requested["answer"])
+            expected = expected_for_group(group)[index]
+
+            output[key] = {
+                "status": compare(student, expected)
+            }
+
+        except (
+            InputError, KeyError, IndexError, TypeError,
+            ValueError, ZeroDivisionError
+        ) as error:
+            output[key] = {
+                "status": "unverified",
+                "message": str(error)
+            }
+
+except (InputError, KeyError, TypeError, ValueError) as error:
+    for requested in data.get("rows", []):
+        output[requested["key"]] = {
+            "status": "unverified",
+            "message": str(error)
+        }
+
+json.dumps(output)
+`;
+
+async function checkEOMRows(rows) {
+  if (!checksEnabled()) return {};
+
+  const s6 = ensureStep6Data();
+  const sourceBefore = eomSourceSnapshot();
+
+  const requested = rows.map(row => ({
+    key: row.key,
+    group: row.group,
+    index: row.index,
+    answer: String(s6.answers[row.key] || "").trim()
+  }));
+
+  const answerBefore = JSON.stringify(requested);
+
+  const payload = {
+    rows: requested,
+    step2: {
+      eqVals: progress.step2.eqVals,
+      rotVals: progress.step2.rotVals
+    },
+    step3: {
+      totalMass: progress.step3.totalMass,
+      j_total: progress.step3.j_total
+    },
+    step5: {
+      check_result: ensureStep5Data().check_result,
+      totBasis: ensureStep5Data().totBasis,
+      totF: ensureStep5Data().totF,
+      totM: ensureStep5Data().totM
+    },
+    step5_snapshot: step5Snapshot()
+  };
+
+  const engine = await ensurePyodide();
+  engine.globals.set(
+    "eom_check_input",
+    JSON.stringify(payload)
+  );
+
+  let results;
+  try {
+    results = JSON.parse(
+      await engine.runPythonAsync(EOM_CHECK_PY)
+    );
+  } finally {
+    engine.globals.delete("eom_check_input");
+  }
+
+  if (
+    eomSourceSnapshot() !== sourceBefore ||
+    JSON.stringify(rows.map(row => ({
+      key: row.key,
+      group: row.group,
+      index: row.index,
+      answer: String(s6.answers[row.key] || "").trim()
+    }))) !== answerBefore
+  ) {
+    return { changed: true };
+  }
+
+  for (const item of requested) {
+    s6.results[item.key] = {
+      ...(results[item.key] || {
+        status: "unverified",
+        message: "No result returned."
+      }),
+      answer: item.answer,
+      sourceSnapshot: sourceBefore
+    };
+  }
+
+  persist();
+  return results;
+}
+
+$("checkAllEOMBtn").addEventListener("click", async () => {
+  if (!checksEnabled()) return;
+
+  const rows = activeEOMRows();
+  if (!rows.length) {
+    alert("No active state variables found in Step 2.");
+    return;
+  }
+
+  const button = $("checkAllEOMBtn");
+  button.disabled = true;
+
+  try {
+    const results = await checkEOMRows(rows);
+
+    if (results.changed) {
+      alert("Inputs changed during the check. Try again.");
+      return;
+    }
+
+    const counts = {
+      exact: 0,
+      rounded: 0,
+      different: 0,
+      unverified: 0
+    };
+
+    for (const row of rows) {
+      const result = results[row.key] || {
+        status: "unverified",
+        message: "No result returned."
+      };
+
+      if (result.status in counts) {
+        counts[result.status]++;
+      } else {
+        counts.unverified++;
+      }
+
+      const element = document.querySelector(
+        `[data-eom-key="${row.key}"]`
+      );
+      if (element) displayEOMResult(element, result);
+    }
+
+    alert(
+      `EOM check complete:\n` +
+      `Exact: ${counts.exact}\n` +
+      `Within rounding tolerance: ${counts.rounded}\n` +
+      `Different: ${counts.different}\n` +
+      `Could not verify: ${counts.unverified}`
+    );
+  } catch (error) {
+    alert(`EOM check unavailable: ${error.message}`);
+  } finally {
+    button.disabled = !checksEnabled();
+  }
+});
+
+// ── Start the app only after all chunks are defined ──────
+
+async function startDynamicsHelper() {
+  if (typeof loadProblemList !== "function") {
+    throw new Error("Shared loading code was not found.");
+  }
+
+  await loadProblemList();
+
+  // loadProblem() refreshes the active tab once the image arrives.
+  // Step 1 does not depend on the image, so refresh it explicitly.
+  if (currentProblemId) refreshStep1();
+}
+
+startDynamicsHelper().catch(error => {
+  console.error("Could not start Dynamics Helper:", error);
+  setSaveStatus(`Startup failed: ${error.message}`);
+});
+
+// ═══════════════════════════════════════════════════════════
+// END OF CHUNK 8
+// ═══════════════════════════════════════════════════════════
+</script>
 </body>
 </html>
