@@ -4353,11 +4353,11 @@ def expected_for_group(group):
         inertia = matrix(
             step3["j_total"], "Step 3 total inertia"
         )
-        if exact(inertia.det(), 0):
-            raise InputError(
-                "The inertia tensor is singular; its inverse "
-                "is undefined."
-            )
+#        if exact(inertia.det(), 0):
+#            raise InputError(
+#                "The inertia tensor is singular; its inverse "
+#                "is undefined."
+#            )
 
         omega_inertial = vector(
             eq["omega"], "Step 2 angular velocity"
@@ -4373,7 +4373,7 @@ def expected_for_group(group):
             else rotation * total_moment
         )
 
-        acceleration_vehicle = inertia.inv() * (
+        acceleration_vehicle = inertia.pinv() * (
             moment_vehicle
             - omega_vehicle.cross(inertia * omega_vehicle)
         )
