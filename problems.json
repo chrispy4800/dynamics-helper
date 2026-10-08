@@ -2,5 +2,11 @@
   {
     "id": "vehicle-a",
     "name": "Vehicle A (Default)"
+  },
+  {
+    "id": "Cubesat",
+    "name": "Cubesat"
   }
+
+  
 ]
